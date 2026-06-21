@@ -379,62 +379,70 @@ Invalid UTF-8 byte or sequence at line 296 replaced by U+FFFD.
 \bframesep=\dimen174
 \bframebox=\box56
 LaTeX Info: Redefining \\ on input line 3056.
+) (enumitem.sty
+Package: enumitem 2019/06/20 v3.9 Customized lists
+\labelindent=\skip70
+\enit@outerparindent=\dimen175
+\enit@toks=\toks35
+\enit@inbox=\box57
+\enit@count@id=\count305
+\enitdp@description=\count306
 )
-\c@theorem=\count305
-\c@proposition=\count306
-\c@corollary=\count307
-\c@remark=\count308
-LaTeX Font Info:    Trying to load font information for TU+ppl on input line 35
+\c@theorem=\count307
+\c@proposition=\count308
+\c@corollary=\count309
+\c@remark=\count310
+LaTeX Font Info:    Trying to load font information for TU+ppl on input line 36
 .
-LaTeX Font Info:    No file TUppl.fd. on input line 35.
+LaTeX Font Info:    No file TUppl.fd. on input line 36.
 
 
 LaTeX Font Warning: Font shape `TU/ppl/m/n' undefined
-(Font)              using `TU/lmr/m/n' instead on input line 35.
+(Font)              using `TU/lmr/m/n' instead on input line 36.
 
 (l3backend-xetex.def
 File: l3backend-xetex.def 2022-02-07 L3 backend support: XeTeX
-\c__kernel_sys_dvipdfmx_version_int=\count309
-\l__color_backend_stack_int=\count310
-\g__color_backend_stack_int=\count311
-\g__graphics_track_int=\count312
-\l__pdf_internal_box=\box57
-\g__pdf_backend_object_int=\count313
-\g__pdf_backend_annotation_int=\count314
-\g__pdf_backend_link_int=\count315
+\c__kernel_sys_dvipdfmx_version_int=\count311
+\l__color_backend_stack_int=\count312
+\g__color_backend_stack_int=\count313
+\g__graphics_track_int=\count314
+\l__pdf_internal_box=\box58
+\g__pdf_backend_object_int=\count315
+\g__pdf_backend_annotation_int=\count316
+\g__pdf_backend_link_int=\count317
 ) (TKV.aux)
 \openout1 = `TKV.aux'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 35.
-LaTeX Font Info:    ... okay on input line 35.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 35.
-LaTeX Font Info:    ... okay on input line 35.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 35.
-LaTeX Font Info:    ... okay on input line 35.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 35.
-LaTeX Font Info:    ... okay on input line 35.
-LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 35.
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 36.
+LaTeX Font Info:    ... okay on input line 36.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 36.
+LaTeX Font Info:    ... okay on input line 36.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 36.
+LaTeX Font Info:    ... okay on input line 36.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 36.
+LaTeX Font Info:    ... okay on input line 36.
+LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 36.
 LaTeX Font Info:    Trying to load font information for TS1+cmr on input line 3
-5.
+6.
  (ts1cmr.fd
 File: ts1cmr.fd 2019/12/16 v2.5j Standard LaTeX font definitions
 )
-LaTeX Font Info:    ... okay on input line 35.
-LaTeX Font Info:    Checking defaults for TU/lmr/m/n on input line 35.
-LaTeX Font Info:    ... okay on input line 35.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 35.
-LaTeX Font Info:    ... okay on input line 35.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 35.
-LaTeX Font Info:    ... okay on input line 35.
-LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 35.
-LaTeX Font Info:    ... okay on input line 35.
-LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 35.
-LaTeX Font Info:    ... okay on input line 35.
+LaTeX Font Info:    ... okay on input line 36.
+LaTeX Font Info:    Checking defaults for TU/lmr/m/n on input line 36.
+LaTeX Font Info:    ... okay on input line 36.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 36.
+LaTeX Font Info:    ... okay on input line 36.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 36.
+LaTeX Font Info:    ... okay on input line 36.
+LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 36.
+LaTeX Font Info:    ... okay on input line 36.
+LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 36.
+LaTeX Font Info:    ... okay on input line 36.
  (upquote.sty
 Package: upquote 2012/04/19 v1.3 upright-quote and grave-accent glyphs in verba
 tim
 )
-Package hyperref Info: Link coloring OFF on input line 35.
+Package hyperref Info: Link coloring OFF on input line 36.
  (nameref.sty
 Package: nameref 2021-04-02 v2.47 Cross-referencing by name of section
 
@@ -443,20 +451,20 @@ Package: refcount 2019/12/15 v3.6 Data extraction from label references (HO)
 ) (gettitlestring.sty
 Package: gettitlestring 2019/12/15 v1.6 Cleanup title references (HO)
 )
-\c@section@level=\count316
+\c@section@level=\count318
 )
-LaTeX Info: Redefining \ref on input line 35.
-LaTeX Info: Redefining \pageref on input line 35.
-LaTeX Info: Redefining \nameref on input line 35.
+LaTeX Info: Redefining \ref on input line 36.
+LaTeX Info: Redefining \pageref on input line 36.
+LaTeX Info: Redefining \nameref on input line 36.
  (TKV.out) (TKV.out)
 \@outlinefile=\write3
 \openout3 = `TKV.out'.
 
-LaTeX Info: Redefining \microtypecontext on input line 35.
-Package microtype Info: Applying patch `item' on input line 35.
-Package microtype Info: Applying patch `toc' on input line 35.
-Package microtype Info: Applying patch `eqnum' on input line 35.
-Package microtype Info: Applying patch `footnote' on input line 35.
+LaTeX Info: Redefining \microtypecontext on input line 36.
+Package microtype Info: Applying patch `item' on input line 36.
+Package microtype Info: Applying patch `toc' on input line 36.
+Package microtype Info: Applying patch `eqnum' on input line 36.
+Package microtype Info: Applying patch `footnote' on input line 36.
 Package microtype Info: Character protrusion enabled (level 2).
 Package microtype Info: Using default protrusion set `alltext'.
 Package microtype Info: No adjustment of tracking.
@@ -472,30 +480,30 @@ Package microtype Info: Loading generic protrusion settings for font family
 
 
 LaTeX Font Warning: Font shape `TU/ppl/b/n' undefined
-(Font)              using `TU/ppl/m/n' instead on input line 42.
+(Font)              using `TU/ppl/m/n' instead on input line 43.
 
 LaTeX Font Info:    Trying to load font information for OT1+ppl on input line 4
-2.
+3.
 (ot1ppl.fd
 File: ot1ppl.fd 2001/06/04 font definitions for OT1/ppl.
 )
 LaTeX Font Info:    Trying to load font information for OML+zplm on input line 
-42.
+43.
  (omlzplm.fd
 File: omlzplm.fd 2002/09/08 Fontinst v1.914 font definitions for OML/zplm.
 )
 LaTeX Font Info:    Trying to load font information for OMS+zplm on input line 
-42.
+43.
  (omszplm.fd
 File: omszplm.fd 2002/09/08 Fontinst v1.914 font definitions for OMS/zplm.
 )
 LaTeX Font Info:    Trying to load font information for OMX+zplm on input line 
-42.
+43.
  (omxzplm.fd
 File: omxzplm.fd 2002/09/08 Fontinst v1.914 font definitions for OMX/zplm.
 )
 LaTeX Font Info:    Trying to load font information for OT1+zplm on input line 
-42.
+43.
  (ot1zplm.fd
 File: ot1zplm.fd 2002/09/08 Fontinst v1.914 font definitions for OT1/zplm.
 )
@@ -504,53 +512,53 @@ Package microtype Info: Loading generic protrusion settings for font family
 (microtype)             For optimal results, create family-specific settings.
 (microtype)             See the microtype manual for details.
 LaTeX Font Info:    Font shape `U/msa/m/n' will be
-(Font)              scaled to size 10.42007pt on input line 42.
+(Font)              scaled to size 10.42007pt on input line 43.
  (mt-msa.cfg
 File: mt-msa.cfg 2006/02/04 v1.1 microtype config. file: AMS symbols (a) (RS)
 )
 LaTeX Font Info:    Font shape `U/msa/m/n' will be
-(Font)              scaled to size 7.91925pt on input line 42.
+(Font)              scaled to size 7.91925pt on input line 43.
 LaTeX Font Info:    Font shape `U/msa/m/n' will be
-(Font)              scaled to size 6.25204pt on input line 42.
+(Font)              scaled to size 6.25204pt on input line 43.
 LaTeX Font Info:    Font shape `U/msb/m/n' will be
-(Font)              scaled to size 10.42007pt on input line 42.
+(Font)              scaled to size 10.42007pt on input line 43.
 
 (mt-msb.cfg
 File: mt-msb.cfg 2005/06/01 v1.0 microtype config. file: AMS symbols (b) (RS)
 )
 LaTeX Font Info:    Font shape `U/msb/m/n' will be
-(Font)              scaled to size 7.91925pt on input line 42.
+(Font)              scaled to size 7.91925pt on input line 43.
 LaTeX Font Info:    Font shape `U/msb/m/n' will be
-(Font)              scaled to size 6.25204pt on input line 42.
+(Font)              scaled to size 6.25204pt on input line 43.
 Package microtype Info: Loading generic protrusion settings for font family
 (microtype)             `lmss' (encoding: TU).
 (microtype)             For optimal results, create family-specific settings.
 (microtype)             See the microtype manual for details.
 LaTeX Font Info:    Trying to load font information for U+fplmbb on input line 
-77.
+78.
  (ufplmbb.fd
 File: ufplmbb.fd 2003/10/30 Fontinst v1.914 font definitions for U/fplmbb.
 )
 
 LaTeX Font Warning: Font shape `TU/ppl/m/it' undefined
-(Font)              using `TU/ppl/m/n' instead on input line 79.
+(Font)              using `TU/ppl/m/n' instead on input line 80.
 
 [1
 
 ] [2]
 Package hyperref Info: bookmark level for unknown algorithm defaults to 0 on in
-put line 189.
+put line 190.
 
-Underfull \vbox (badness 5119) has occurred while \output is active []
+Underfull \vbox (badness 5726) has occurred while \output is active []
 
  [3]
 LaTeX Font Info:    Trying to load font information for TU+zi4 on input line 25
-4.
-LaTeX Font Info:    No file TUzi4.fd. on input line 254.
+3.
+LaTeX Font Info:    No file TUzi4.fd. on input line 253.
 
 
 LaTeX Font Warning: Font shape `TU/zi4/m/n' undefined
-(Font)              using `TU/lmr/m/n' instead on input line 254.
+(Font)              using `TU/lmr/m/n' instead on input line 253.
 
 (mt-LatinModernRoman.cfg
 File: mt-LatinModernRoman.cfg 2021/02/21 v1.1 microtype config. file: Latin Mod
@@ -561,62 +569,90 @@ Package microtype Info: Loading generic protrusion settings for font family
 (microtype)             For optimal results, create family-specific settings.
 (microtype)             See the microtype manual for details.
  [4]
-
-LaTeX Font Warning: Font shape `TU/ppl/b/it' undefined
-(Font)              using `TU/ppl/b/n' instead on input line 339.
-
 LaTeX Font Info:    Font shape `U/msa/m/n' will be
-(Font)              scaled to size 9.37807pt on input line 400.
+(Font)              scaled to size 9.37807pt on input line 377.
 LaTeX Font Info:    Font shape `U/msa/m/n' will be
-(Font)              scaled to size 7.29405pt on input line 400.
+(Font)              scaled to size 7.29405pt on input line 377.
 LaTeX Font Info:    Font shape `U/msa/m/n' will be
-(Font)              scaled to size 5.21004pt on input line 400.
+(Font)              scaled to size 5.21004pt on input line 377.
 LaTeX Font Info:    Font shape `U/msb/m/n' will be
-(Font)              scaled to size 9.37807pt on input line 400.
+(Font)              scaled to size 9.37807pt on input line 377.
 LaTeX Font Info:    Font shape `U/msb/m/n' will be
-(Font)              scaled to size 7.29405pt on input line 400.
+(Font)              scaled to size 7.29405pt on input line 377.
 LaTeX Font Info:    Font shape `U/msb/m/n' will be
-(Font)              scaled to size 5.21004pt on input line 400.
-[5]
+(Font)              scaled to size 5.21004pt on input line 377.
+ [5]
 File: ../results//benchmark_brand_vs_oja.pdf Graphic file (type pdf)
 <use ../results//benchmark_brand_vs_oja.pdf>
 File: ../results//benchmark_tkv_reconstruction.pdf Graphic file (type pdf)
 <use ../results//benchmark_tkv_reconstruction.pdf>
+
+Underfull \vbox (badness 1028) has occurred while \output is active []
+
  [6]
 File: ../results//benchmark_memory.pdf Graphic file (type pdf)
 <use ../results//benchmark_memory.pdf>
 
-Underfull \vbox (badness 10000) has occurred while \output is active []
-
- [7]
+[7]
 File: ../results//benchmark_perplexity.pdf Graphic file (type pdf)
 <use ../results//benchmark_perplexity.pdf>
-
-[8]
 File: ../results//benchmark_importance.pdf Graphic file (type pdf)
 <use ../results//benchmark_importance.pdf>
- [9] (TKV.bbl [10])
-Underfull \hbox (badness 5345) in paragraph at lines 761--765
-\TU/zi4/m/n/10 Decode latency, full numbers (Section []4.2[]): at $\OML/zplm/m/
-it/10 R \OT1/zplm/m/n/10 = \OT1/ppl/m/n/10 8\OT1/zplm/m/n/10 /\OT1/ppl/m/n/10 1
-6\OT1/zplm/m/n/10 /\OT1/ppl/m/n/10 32\OT1/zplm/m/n/10 /\OT1/ppl/m/n/10 64$\TU/z
-i4/m/n/10 , ms/tok
+
+Underfull \vbox (badness 8038) has occurred while \output is active []
+
+ [8]
+[9] (TKV.bbl
+Underfull \hbox (badness 1810) in paragraph at lines 19--23
+[]\TU/ppl/m/it/9 Anonymous.  Kq-svd: Optimal low-rank decomposition of the atte
+ntion matrix, 2025a.
+ []
+
+)
+Underfull \hbox (badness 2205) in paragraph at lines 723--728
+[]\TU/ppl/b/n/9 attention is computed directly from the SVD factors: $\OT1/zplm
+/b/n/9 s \OT1/zplm/m/n/9 =
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 761--765
-\TU/zi4/m/n/10 is $\OT1/ppl/m/n/10 1.953\OT1/zplm/m/n/10 /\OT1/ppl/m/n/10 2.141
-\OT1/zplm/m/n/10 /\OT1/ppl/m/n/10 2.052\OT1/zplm/m/n/10 /\OT1/ppl/m/n/10 11.939
-$ \TU/zi4/m/n/10 (BrandOnly), $\OT1/ppl/m/n/10 0.192\OT1/zplm/m/n/10 /\OT1/ppl/
-m/n/10 0.188\OT1/zplm/m/n/10 /\OT1/ppl/m/n/10 0.193\OT1/zplm/m/n/10 /\OT1/ppl/m
-/n/10 0.771$ \TU/zi4/m/n/10 (TKV),
+Underfull \hbox (badness 5431) in paragraph at lines 735--738
+[]\TU/ppl/b/n/9 at $\OML/zplm/m/it/9 R \OT1/zplm/m/n/9 = \OT1/ppl/m/n/9 8\OT1/z
+plm/m/n/9 /\OT1/ppl/m/n/9 16\OT1/zplm/m/n/9 /\OT1/ppl/m/n/9 32\OT1/zplm/m/n/9 /
+\OT1/ppl/m/n/9 64$\TU/ppl/b/n/9 , ms/tok is $\OT1/ppl/m/n/9 1.953\OT1/zplm/m/n/
+9 /\OT1/ppl/m/n/9 2.141\OT1/zplm/m/n/9 /\OT1/ppl/m/n/9 2.052\OT1/zplm/m/n/9 /\O
+T1/ppl/m/n/9 11.939$ \TU/ppl/b/n/9 (Bran-
  []
 
-[11] (TKV.aux)
+
+Underfull \hbox (badness 10000) in paragraph at lines 735--738
+\TU/ppl/b/n/9 dOnly), $\OT1/ppl/m/n/9 0.192\OT1/zplm/m/n/9 /\OT1/ppl/m/n/9 0.18
+8\OT1/zplm/m/n/9 /\OT1/ppl/m/n/9 0.193\OT1/zplm/m/n/9 /\OT1/ppl/m/n/9 0.771$ \T
+U/ppl/b/n/9 (TKV), $\OT1/ppl/m/n/9 0.498\OT1/zplm/m/n/9 /\OT1/ppl/m/n/9 0.495\O
+T1/zplm/m/n/9 /\OT1/ppl/m/n/9 0.584\OT1/zplm/m/n/9 /\OT1/ppl/m/n/9 0.568$ \TU/p
+pl/b/n/9 (OjaKV); TKV error
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 744--749
+[]\TU/ppl/b/n/9 GPT-2, $\OML/zplm/m/it/9 d[]\OT1/ppl/m/n/9 64$\TU/ppl/b/n/9 : f
+ull KV/OjaKV($\OML/zplm/m/it/9 R[]\OT1/ppl/m/n/9 8$\TU/ppl/b/n/9 )/TKV-pyramid 
+memory is
+ []
+
+
+Underfull \hbox (badness 3229) in paragraph at lines 744--749
+\OT1/ppl/m/n/9 0.074\OT1/zplm/m/n/9 /\OT1/ppl/m/n/9 0.010\OT1/zplm/m/n/9 /\OT1/
+ppl/m/n/9 0.018$\TU/ppl/b/n/9 GB at 1K, $\OT1/ppl/m/n/9 0.590\OT1/zplm/m/n/9 /\
+OT1/ppl/m/n/9 0.074\OT1/zplm/m/n/9 /\OT1/ppl/m/n/9 0.139$\TU/ppl/b/n/9 GB at 8K
+, $\OT1/ppl/m/n/9 2.359\OT1/zplm/m/n/9 /\OT1/ppl/m/n/9 0.296\OT1/zplm/m/n/9 /\O
+T1/ppl/m/n/9 0.554$\TU/ppl/b/n/9 GB at 32K,
+ []
+
+[10] [11] (TKV.aux)
 
 LaTeX Font Warning: Some font shapes were not available, defaults substituted.
 
 Package rerunfilecheck Info: File `TKV.out' has not changed.
-(rerunfilecheck)             Checksum: FB36ABBD08EC7D87781C105CAC2A8FE5;3851.
+(rerunfilecheck)             Checksum: 2C6C2230B08D86EDA8B4C562C4BE48FA;3690.
  )
-Output written on TKV.xdv (11 pages, 359700 bytes).
+Output written on TKV.xdv (11 pages, 344704 bytes).

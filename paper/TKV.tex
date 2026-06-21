@@ -11,6 +11,7 @@
 \usepackage{algorithm}
 \usepackage{algpseudocode}
 \usepackage{lineno}
+\usepackage{enumitem}
 
 \newtheorem{theorem}{Theorem}
 \newtheorem{proposition}{Proposition}
@@ -227,11 +228,9 @@ rank-1 update:
 \end{algorithmic}
 \end{algorithm}
 
-The truncation at step~5 is exactly an EYM projection: the resulting
-$\hat{U}_{:R} \hat{\Sigma}_{:R} \hat{V}_{:R}^\top$ is the best rank-$R$
-approximation of $[K; \mathbf{k}^\top]$ in Frobenius norm.  This guarantee
-holds after every token \emph{during the warmup phase}, i.e., for
-$t \leq T_0$; Section~\ref{sec:freeze} describes the post-warmup regime.
+The truncation at step~5 is exactly an EYM projection (formalized as
+Corollary~\ref{cor:eym}), holding after every token during the warmup phase
+($t \leq T_0$); Section~\ref{sec:freeze} describes the post-warmup regime.
 
 \subsection{Freeze Transition (Decode Phase)}
 \label{sec:freeze}
@@ -259,14 +258,12 @@ caps per-token cost at $\mathcal{O}(Rd)$ for the rest of the sequence,
 regardless of how long it runs --- the gap between the two reaches
 $13.4\times$ by $T=16{,}000$ (Section~\ref{sec:experiments}).
 
-The honest tradeoff (stated precisely in Section~\ref{sec:theory}) is that
-frozen-phase tokens are no longer individually EYM-optimal, since $V_K$
-was fit to $K_{T_0}$, not the full sequence.  Empirically this is
-favorable regardless: OjaKV's basis keeps rotating and its projection
-error compounds with $t$, while TKV's frozen projection error does not, so
-TKV's fixed-but-accurate basis still outperforms OjaKV's
-continuously-drifting one at every long-context length we tested
-(Section~\ref{sec:experiments}).
+The tradeoff (formalized as Proposition~\ref{prop:postfreeze}) is that
+frozen-phase tokens are no longer individually EYM-optimal, since $V_K$ was
+fit to $K_{T_0}$ rather than the full sequence; empirically this is
+favorable regardless, since TKV's fixed-but-accurate basis still
+outperforms OjaKV's continuously-drifting one at every long-context length
+tested (Section~\ref{sec:experiments}).
 
 \subsection{XLA-Static Shape Implementation}
 \label{sec:xla}
@@ -293,78 +290,58 @@ When the context must be re-compressed (e.g., at context-length boundaries),
 these scores serve as row weights in the Halko cold start, biasing the initial
 basis toward tokens that are actually attended to.  Section~\ref{sec:experiments}
 shows this reduces important-token reconstruction error by 90--95\% at rank 8--16.
-
-\subsection{Compressed Attention}
-\label{sec:attn}
-
-Attention can be computed directly from the SVD factors without explicit
-reconstruction of $K$ or $V$:
-\begin{align}
-  \mathbf{s} &= \mathbf{q} K^\top = \mathbf{q} V_K^\top \Sigma_K U_K^\top
-               \in \R^T, \qquad
-  \mathbf{out} = \mathrm{softmax}(\mathbf{s}) U_V \Sigma_V V_V \in \R^d,
-\end{align}
-requiring only matrix-vector products with the rank-$R$ factors
-($\mathcal{O}(R(T{+}d))$ vs.\ $\mathcal{O}(Td)$ for dense attention).  In the
-frozen phase, the same formula applies with $U_K \Sigma_K$ replaced by the
-stored projections $\mathrm{proj}_K$, so compressed attention is computed
-identically before and after the freeze.
+Attention is computed directly from these SVD factors without
+reconstructing $K$ or $V$, at $\mathcal{O}(R(T{+}d))$ rather than
+$\mathcal{O}(Td)$ cost, identically before and after the freeze
+(Appendix~\ref{app:attn} gives the formula).
 
 %% ============================================================
 \section{Theoretical Analysis}
 \label{sec:theory}
 
-The following results follow directly from applying Brand's exact rank-1
-update iteratively under the Eckart-Young-Mirsky theorem; the contribution
-is identifying that this combination maintains EYM-optimality token-by-token
-in the KV cache setting, a property that does not hold for Oja's rule.
+These results follow from applying Brand's exact rank-1 update iteratively
+under the Eckart-Young-Mirsky theorem; the contribution is recognizing that
+this combination maintains EYM-optimality token-by-token in the KV cache
+setting, which Oja's rule does not.
 
 \begin{corollary}[Per-Token EYM Optimality, Warmup Phase]
 \label{cor:eym}
 Let $K_t \in \R^{t \times d}$ be the key matrix after $t \leq T_0$ tokens
-(i.e., during the warmup window), and let
-$(U_t, \boldsymbol{\sigma}_t, V_t)$ be the TKV state after processing the $t$-th
-token via Algorithm~2.  Then
+and $(U_t, \boldsymbol{\sigma}_t, V_t)$ the TKV state after the $t$-th Brand
+update (Algorithm~2). Then
 $\| K_t - U_t \mathrm{diag}(\boldsymbol{\sigma}_t) V_t^\top \|_F
-  = \min_{\mathrm{rank}(B) \leq R} \| K_t - B \|_F$
-(the Brand update at step $t$ truncates the exact SVD of
-$K_{\mathrm{aug}} = [K_{t-1}; \mathbf{k}_t^\top]$ to rank $R$, which by EYM
-is the best such approximation).
+  = \min_{\mathrm{rank}(B) \leq R} \| K_t - B \|_F$,
+since each update truncates the exact SVD of $[K_{t-1}; \mathbf{k}_t^\top]$
+to rank $R$.
 \end{corollary}
 
 \begin{proposition}[Post-Freeze Cost and Quality]
 \label{prop:postfreeze}
-For $t > T_0$, TKV's basis $(V_{T_0,K}, V_{T_0,V})$ is held fixed and each
-new token is processed in $\mathcal{O}(Rd)$ time via projection onto it
-(Algorithm~3), with \textbf{no further EYM updates}: the projection is exact
-within the rowspace of $V_{T_0,K}$ but not in general the EYM-optimal
-rank-$R$ approximation of $K_t$, since $V_{T_0,K}$ was optimized only for
-$K_{T_0}$.  Quality after freezing is therefore bounded by how well the
-warmup-window subspace continues to span later tokens' directions, not by a
-fresh per-token optimality guarantee.
+For $t > T_0$, the fixed basis $(V_{T_0,K}, V_{T_0,V})$ processes each token
+in $\mathcal{O}(Rd)$ time (Algorithm~3) with no further EYM updates: the
+projection is exact within the rowspace of $V_{T_0,K}$ but not, in general,
+the EYM-optimal rank-$R$ approximation of $K_t$. Post-freeze quality is
+therefore bounded by how well the warmup-window subspace continues to span
+later tokens, not by a fresh optimality guarantee.
 \end{proposition}
 
 \begin{corollary}[Comparison to OjaKV]
 For $t \leq T_0$, TKV achieves the minimum Frobenius reconstruction error
-among all rank-$R$ factorizations of $K_t$, while OjaKV's stochastic-gradient
-state has no analogous guarantee and can exceed the EYM optimum at any
-finite $t$.  For $t > T_0$ neither method retains a strict guarantee
-(Proposition~\ref{prop:postfreeze}), but empirically TKV's
-fixed-but-accurate basis still outperforms OjaKV's continuously-drifting
-one at every long-context length tested, since OjaKV's staleness error
-compounds with $t$ while TKV's frozen-basis error does not
-(Section~\ref{sec:experiments}).
+among all rank-$R$ factorizations of $K_t$; OjaKV's stochastic-gradient
+state has no analogous guarantee. For $t > T_0$ neither method retains a
+strict guarantee (Proposition~\ref{prop:postfreeze}), but empirically TKV's
+fixed-but-accurate basis still outperforms OjaKV's continuously-drifting one
+at every long-context length tested (Section~\ref{sec:experiments}).
 \end{corollary}
 
 \begin{proposition}[Cold Start Error Bound]
-After the Halko cold start with oversampling parameter $p$, the TKV
-approximation satisfies, with probability at least $1 - \delta$,
+After the Halko cold start with oversampling parameter $p$,
 $\| K - \hat{K} \|_F \leq
-  \left(1 + \sqrt{R/(p+1)} \cdot t_\delta \right) \sigma_{R+1}(K)$,
-where $\sigma_{R+1}$ is the $(R+1)$-th singular value of $K$ and $t_\delta$ is
-a tail factor from the Halko error bound (Theorem~1.1 in \citep{halko2011}).
-Brand updates maintain this quality exactly through $t = T_0$
-(Proposition~\ref{prop:postfreeze} covers the regime beyond).
+  \left(1 + \sqrt{R/(p+1)} \cdot t_\delta \right) \sigma_{R+1}(K)$
+with probability at least $1-\delta$, where $\sigma_{R+1}(K)$ is the
+$(R+1)$-th singular value and $t_\delta$ is a tail factor from the Halko
+error bound (Theorem~1.1 in \citep{halko2011}); Brand updates preserve this
+quality exactly through $t = T_0$.
 \end{proposition}
 
 %% ============================================================
@@ -447,7 +424,7 @@ error trajectory.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\linewidth]{benchmark_brand_vs_oja.pdf}
+\includegraphics[width=0.85\linewidth]{benchmark_brand_vs_oja.pdf}
 \caption{BrandOnly-vs-OjaKV ablation (no freeze). Left: reconstruction error vs rank at $T=512$. Center: streaming error
 accumulation at rank~16 over 512 tokens. Right: per-token update time vs rank at $T=512$.}
 \label{fig:comparison}
@@ -472,7 +449,7 @@ shows the trend visually.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\linewidth]{benchmark_tkv_reconstruction.pdf}
+\includegraphics[width=0.8\linewidth]{benchmark_tkv_reconstruction.pdf}
 \caption{Left: TKV vs OjaKV reconstruction error vs sequence length, by rank.
 Right: TKV error vs rank, by sequence length.  TKV's error stays essentially
 flat as $T$ grows past the $T_0=512$ freeze point, while OjaKV's drifting
@@ -517,7 +494,7 @@ the architecture modern long-context models actually use.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.6\linewidth]{benchmark_memory.pdf}
+\includegraphics[width=0.5\linewidth]{benchmark_memory.pdf}
 \caption{Memory compression ratio vs sequence length at various ranks.
 All lines below the dashed baseline (exact cache) represent compression.}
 \label{fig:memory}
@@ -613,7 +590,7 @@ scales.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.7\linewidth]{benchmark_perplexity.pdf}
+\includegraphics[width=0.6\linewidth]{benchmark_perplexity.pdf}
 \caption{Mistral-7B perplexity (left) and perplexity ratio vs exact (right)
 as a function of the Halko cold-start ablation's uniform rank
 (full numbers in Appendix~\ref{app:ppl}).  The sharp knee between rank~16
@@ -632,37 +609,16 @@ tokens, 0.1 for noise) derived from ground-truth knowledge of which tokens
 matter rather than EMA attention statistics --- an upper bound on what
 real attention-derived weights can achieve in practice.
 
-\begin{table}[t]
-\centering
-\caption{Reconstruction error on important tokens (first 32 of 128) with
-and without importance weighting using \emph{oracle} weights.  Error reduction
-is 90--95\% at rank 8--16; real attention-derived weights will yield smaller
-but still substantial gains.}
-\label{tab:importance}
-\small
-\begin{tabular}{rccc}
-\toprule
-Rank & Uniform error & Weighted error & Reduction \\
-\midrule
- 4 & 0.598 & 0.495 &  17.2\% \\
- 8 & 0.269 & 0.014 &  94.9\% \\
-16 & 0.111 & 0.008 &  93.0\% \\
-32 & 0.045 & 0.004 &  90.5\% \\
-\bottomrule
-\end{tabular}
-\normalsize
-\end{table}
-
 At rank~4, both methods struggle because the rank budget is below the true
 rank-4 subspace of important tokens plus noise interference; at rank $\geq 8$,
-importance weighting reduces important-token error by more than 10$\times$,
-suggesting that EMA attention-weight statistics available during generation
-can dramatically improve re-compression quality when context windows are
-refreshed.
+importance weighting reduces important-token error by more than 10$\times$
+(full per-rank numbers in Appendix~\ref{app:importance}), suggesting that EMA
+attention-weight statistics available during generation can dramatically
+improve re-compression quality when context windows are refreshed.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.7\linewidth]{benchmark_importance.pdf}
+\includegraphics[width=0.6\linewidth]{benchmark_importance.pdf}
 \caption{Left: important-token reconstruction error vs rank. Right: total
 reconstruction error vs rank. Importance weighting provides near-lossless
 recovery of high-attention tokens at rank $\geq 8$.}
@@ -747,45 +703,54 @@ combination viable at long context.  The $\Phi$-bridge unifies this
 pipeline with the importance-tracking data structure at no additional cost.
 
 %% ============================================================
+\small
 \bibliography{colm2026_conference}
 \bibliographystyle{colm2026_conference}
 
 \appendix
+\enlargethispage{8\baselineskip}
 \section{Appendix: Full Supplementary Numbers}
 \label{app:multihead}
 \label{app:memory}
 \label{app:longctx}
 \label{app:ppl}
 \label{app:decode}
+\label{app:importance}
+\label{app:attn}
 
-\textbf{Decode latency, full numbers} (Section~\ref{sec:longctx}): at
-$R=8/16/32/64$, ms/tok is $1.953/2.141/2.052/11.939$ (BrandOnly),
-$0.192/0.188/0.193/0.771$ (TKV), $0.498/0.495/0.584/0.568$ (OjaKV); TKV
-error is $0.597/0.536/0.456/0.351$.
+\begin{description}[topsep=2pt,itemsep=2pt,parsep=0pt,leftmargin=0pt,font=\normalfont\bfseries]
+\item[Compressed attention (\ref{sec:importance}):] attention is
+computed directly from the SVD factors: $\mathbf{s} = \mathbf{q} V_K^\top
+\Sigma_K U_K^\top \in \R^T$, $\mathbf{out} = \mathrm{softmax}(\mathbf{s})
+U_V \Sigma_V V_V \in \R^d$, at $\mathcal{O}(R(T{+}d))$ cost; post-freeze,
+$U_K \Sigma_K$ is replaced by the stored projections $\mathrm{proj}_K$.
 
-\textbf{BrandOnly vs OjaKV, full layer/KV-head sweep} (12 configurations,
-layers 0, 8, 16, 24 $\times$ KV heads 0, 3, 6 of Mistral-7B, summarized in
-Section~\ref{sec:brandonly-ablation}): averaged over the 4 KV-head settings
-at each layer, BrandOnly's advantage over OjaKV ranges from $1.61\times$
-($T{=}512,R{=}8$) to $7.67\times \pm 4.59\times$ ($T{=}64,R{=}32$, the
-configuration with the highest head-to-head variance) and dominates OjaKV
-at every one of the 12 configurations tested, consistent with the
-single-head result in Table~\ref{tab:recon}.
+\item[Importance-weighted cold start (\ref{sec:exp-importance}):]
+oracle-weighted, 128-token benchmark; uniform/weighted important-token
+error at rank $4/8/16/32$: $0.598/0.495$ ($17.2\%$ reduction),
+$0.269/0.014$ ($94.9\%$), $0.111/0.008$ ($93.0\%$), $0.045/0.004$
+($90.5\%$).
 
-\textbf{GPT-2-scale memory compression} (12 layers $\times$ 12 heads,
-$d=64$, float32; counterpart to Table~\ref{tab:longmem-mistral}): full
-KV/OjaKV($R{=}8$)/TKV-pyramid memory is $0.074/0.010/0.018$\,GB at 1K
-tokens, $0.590/0.074/0.139$\,GB at 8K, $2.359/0.296/0.554$\,GB at 32K, and
-$9.437/1.180/2.213$\,GB at 128K --- $4.0$--$4.3\times$ compression
-throughout, lower than Mistral-7B's $8.5\times$ since GPT-2's multi-head
-attention caches more KV heads per layer.
+\item[Decode latency (\ref{sec:longctx}):] at $R=8/16/32/64$, ms/tok is
+$1.953/2.141/2.052/11.939$ (BrandOnly), $0.192/0.188/0.193/0.771$ (TKV),
+$0.498/0.495/0.584/0.568$ (OjaKV); TKV error $0.597/0.536/0.456/0.351$.
 
-\textbf{Long-context reconstruction} (Figure~\ref{fig:longctx},
-Section~\ref{sec:longctx}): across $T=1\text{,}000/8\text{,}000/32\text{,}000$
-and $R=4/8/16$, TKV's relative Frobenius error ranges $0.537$--$0.754$
-versus OjaKV's $0.632$--$0.791$ over the same grid --- TKV wins at every
-$(T,R)$ tested, with the gap widening at higher rank.  (Halko cold-start
-perplexity at rank~48, the one value not already given in
-Section~\ref{sec:ppl}: $19.37$, a $0.753$ memory ratio.)
+\item[BrandOnly vs OjaKV sweep:] 12 configs, Mistral-7B layers 0/8/16/24
+$\times$ heads 0/3/6: advantage ranges $1.61\times$ ($T{=}512,R{=}8$) to
+$7.67\times{\pm}4.59\times$ ($T{=}64,R{=}32$), dominating OjaKV at all 12
+configs (cf.\ Table~\ref{tab:recon}).
+
+\item[GPT-2-scale memory:] GPT-2, $d{=}64$: full
+KV/OjaKV($R{=}8$)/TKV-pyramid memory is $0.074/0.010/0.018$\,GB at 1K,
+$0.590/0.074/0.139$\,GB at 8K, $2.359/0.296/0.554$\,GB at 32K,
+$9.437/1.180/2.213$\,GB at 128K --- $4.0$--$4.3\times$ compression, lower
+than Mistral-7B's $8.5\times$ (fewer KV heads via GQA).
+
+\item[Long-context reconstruction (\ref{sec:longctx}):] across
+$T{=}1\text{,}000/8\text{,}000/32\text{,}000$, $R{=}4/8/16$, TKV's error
+ranges $0.537$--$0.754$ vs.\ OjaKV's $0.632$--$0.791$, winning at every
+$(T,R)$ tested. Halko cold-start perplexity at rank~48: $19.37$, memory
+ratio $0.753$.
+\end{description}
 
 \end{document}
