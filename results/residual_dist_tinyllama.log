@@ -1,0 +1,9 @@
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 5919.13it/s]
+Using the latest cached version of the dataset since Salesforce/wikitext couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'wikitext-2-raw-v1' at ~/.cache/huggingface/datasets/Salesforce___wikitext/wikitext-2-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3 (last modified on Sat Jun 13 10:21:24 2026).
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (341468 > 2048). Running this sequence through the model will result in indexing errors
+
+TinyLlama/TinyLlama-1.1B-Chat-v1.0  ctx=2048 rank=8  n=8,712 (layer x kv-head x needle token)
+mean percentile = 0.649   above 0.5: 0.716   above 0.9: 0.190
+pgfplots coordinates (bin center, fraction):
+(0.025,0.0094) (0.075,0.0141) (0.125,0.0199) (0.175,0.0269) (0.225,0.0287) (0.275,0.0296) (0.325,0.0306) (0.375,0.0398) (0.425,0.0381) (0.475,0.0457) (0.525,0.0451) (0.575,0.0503) (0.625,0.0596) (0.675,0.0637) (0.725,0.0658) (0.775,0.0711) (0.825,0.0843) (0.875,0.0871) (0.925,0.0875) (0.975,0.1028)

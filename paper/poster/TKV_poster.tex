@@ -1,0 +1,298 @@
+% TKV-R poster -- COLM 2026 Workshop, 34in x 34in (86.36cm square)
+% Build: latexmk -pdf TKV_poster.tex
+% All numbers come from results/modal/ and results/tinyllama_* and match paper/TKV.tex.
+\documentclass[final]{beamer}
+\usepackage[size=custom,width=86.36,height=86.36,scale=1.05]{beamerposter}
+
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+
+\newcommand{\R}{\mathbb{R}}
+
+%% ---------------- Colors ----------------
+\definecolor{ink}{HTML}{1B2430}
+\definecolor{navy}{HTML}{16324F}
+\definecolor{accent}{HTML}{D9531E}   % TKV-R
+\definecolor{teal}{HTML}{1F7A8C}     % StreamingLLM / eviction
+\definecolor{soft}{HTML}{EEF3F7}
+\definecolor{muted}{HTML}{5B6B7B}
+\definecolor{good}{HTML}{1E7B45}
+\definecolor{oja}{HTML}{7A8794}      % plain low-rank / baselines
+\definecolor{bad}{HTML}{B3261E}
+
+%% ---------------- Beamer theme ----------------
+\setbeamertemplate{navigation symbols}{}
+\setbeamercolor{normal text}{fg=ink,bg=white}
+\setbeamercolor{structure}{fg=navy}
+\renewcommand{\familydefault}{\sfdefault}
+\setbeamertemplate{itemize item}{\color{accent}$\blacktriangleright$}
+\setbeamerfont{itemize/enumerate body}{size=\normalsize}
+
+\setbeamercolor{block title}{fg=white,bg=navy}
+\setbeamercolor{block body}{fg=ink,bg=white}
+\setbeamerfont{block title}{size=\Large,series=\bfseries}
+\setbeamertemplate{block begin}{%
+  \begin{beamercolorbox}[wd=\linewidth,leftskip=0.7cm,rightskip=0.7cm,ht=1.9cm,dp=0.7cm]{block title}%
+    \usebeamerfont{block title}\insertblocktitle
+  \end{beamercolorbox}%
+  \vskip0.4cm
+  \begin{beamercolorbox}[wd=\linewidth,leftskip=0.4cm,rightskip=0.4cm]{block body}%
+}
+\setbeamertemplate{block end}{\end{beamercolorbox}\vskip0.8cm}
+
+\newcommand{\takeaway}[1]{%
+  \begin{center}
+  \colorbox{soft}{\parbox{0.96\linewidth}{\vspace{0.35cm}\centering\large #1\vspace{0.35cm}}}
+  \end{center}}
+
+\newcommand{\stat}[3]{%
+  \begin{minipage}[t]{0.235\linewidth}\centering
+    {\fontsize{76}{76}\selectfont\bfseries\color{#1}#2}\\[0.4cm]
+    {\large #3}
+  \end{minipage}}
+
+%% ---------------- pgfplots style ----------------
+\pgfplotsset{
+  poster/.style={
+    width=0.9\linewidth, height=12cm,
+    axis lines=left, axis line style={line width=2pt,color=muted},
+    tick style={line width=2pt,color=muted},
+    tick label style={font=\small,color=ink},
+    label style={font=\normalsize,color=ink},
+    title style={font=\normalsize\bfseries,color=ink},
+    grid=major, major grid style={line width=1pt,color=muted!20},
+    every axis plot/.append style={line width=4pt},
+    mark size=8pt,
+    legend style={font=\small,draw=none,fill=white,fill opacity=0.9,text opacity=1},
+    legend cell align=left,
+  }}
+
+%% ---------------- Header ----------------
+\setbeamercolor{headband}{fg=white,bg=navy}
+\setbeamertemplate{headline}{%
+  \vbox{%
+  \begin{beamercolorbox}[wd=\paperwidth]{headband}%
+    \vskip1.3cm
+    \hspace*{2.6cm}%
+    \begin{minipage}[b]{0.77\paperwidth}\raggedright
+      {\fontsize{80}{94}\selectfont\bfseries TKV: Keep What the Basis Cannot Explain\par}
+      \vspace{0.5cm}
+      {\fontsize{46}{56}\selectfont A frozen low-rank KV cache, and the attention-free, query-agnostic selection criterion it provides\par}
+      \vspace{1.0cm}
+      {\fontsize{44}{52}\selectfont\bfseries David Aror}\hspace{1.2cm}%
+      {\fontsize{36}{44}\selectfont\color{white!78!navy}Independent Research
+        \enspace$\cdot$\enspace daror3@gatech.edu \par}
+    \end{minipage}\hfill
+    \begin{minipage}[b]{0.13\paperwidth}\raggedleft
+      {\fontsize{48}{56}\selectfont\bfseries COLM 2026\par}
+      \vspace{0.3cm}
+      {\fontsize{36}{44}\selectfont Workshop\par}
+    \end{minipage}%
+    \hspace*{2.6cm}
+    \vskip1.1cm
+  \end{beamercolorbox}\par\nointerlineskip
+  {\color{accent}\rule{\paperwidth}{0.45cm}}}%
+}
+
+\begin{document}
+\begin{frame}[t]
+\vspace{0.5cm}
+
+%% ================= KEY NUMBERS STRIP =================
+\begin{columns}[t]
+\begin{column}{0.94\paperwidth}
+\stat{good}{only one}{configuration here with a worst-case\\ guarantee: \textbf{TKV-R} (projection, not eviction)}\hfill
+\stat{accent}{0.93}{and it ties the best method on Mistral-7B\\ (H2O 0.67, StreamingLLM 0.60), 0.59$\times$ memory}\hfill
+\stat{accent}{0.77}{TKV-R on TinyLlama: ties H2O, beats\\ SnapKV (0.67) and StreamingLLM (0.60)}\hfill
+\stat{teal}{rank 8}{all the criterion needs: one 8-dim\\ projection of each pre-RoPE key}
+\par\vspace{0.4cm}
+{\color{muted!40}\rule{\linewidth}{2pt}}
+\end{column}
+\end{columns}
+
+\vspace{0.4cm}
+
+\begin{columns}[t]
+%% ================= COLUMN 1 =================
+\begin{column}{0.305\paperwidth}
+
+\begin{block}{Compress Before the Question Arrives}
+Cached documents, multi-turn chat and shared prefixes compress the context
+\textbf{before} the question is known.
+\vspace{0.2cm}
+\begin{itemize}
+  \item \textbf{SnapKV / H2O} score tokens by how \emph{past} queries attended to them, and need attention probabilities that fused kernels don't expose.
+  \item With the question in view, SnapKV is near-exact (1.00). Without it, every method has to guess.
+\end{itemize}
+\takeaway{Can the keys alone tell us which tokens\\ a future query will need?}
+\end{block}
+
+\begin{block}{TKV and Its Residual Criterion (TKV-S)}
+\begin{center}
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \fill[navy!85] (0,0) rectangle (2.4,2.2);
+  \fill[oja!45] (2.4,0) rectangle (16.2,2.2);
+  \foreach \x in {3.3,4.1,6.9,7.6,9.2,11.3,12.0,13.8,15.1} {\fill[accent] (\x,0) rectangle (\x+0.55,2.2);}
+  \fill[good!75] (16.2,0) rectangle (23,2.2);
+  \node[white,font=\small\bfseries] at (1.2,1.1) {sinks};
+  \node[white,font=\small\bfseries] at (19.6,1.1) {recent window};
+  \node[font=\small,color=oja!60!black] at (9.3,-0.75) {rest: evicted (or rank-$R$ coefficients in TKV-R)};
+  \node[font=\small\bfseries,color=accent] at (9.3,2.9) {top-$M$ residual tokens kept exact};
+\end{tikzpicture}
+\end{center}
+\vspace{0.2cm}
+\begin{itemize}
+  \item \textbf{TKV}: fit a rank-$r$ basis $B$ to the \textbf{pre-RoPE} keys of the first 512 tokens, then freeze it ($r{=}8$ for scoring).
+  \item Score every later token by its residual $\rho = \lVert k - B^\top B k\rVert = \sqrt{\lVert k\rVert^2 - \lVert Bk\rVert^2}$.
+  \item \textbf{TKV-S}: keep the top-$M$ residuals exact (a min-heap while streaming). No attention scores, $\mathcal{O}(rd)$ per token.
+\end{itemize}
+A small basis captures what most tokens share; a token carrying \emph{new}
+information is one it explains poorly.
+\end{block}
+
+\begin{block}{Project, Don't Evict}
+RoPE is a rotation, so if a non-selected token is \textbf{kept as a projection}
+(TKV-R), then for any query $q$:
+\[
+\bigl|q^\top \mathcal{R}_j k_j - q^\top \mathcal{R}_j \hat k_j\bigr| \le \lVert q\rVert\,\rho_j,
+\qquad \lVert p - \hat p\rVert_1 \le e^{2\varepsilon} - 1,\;\; \varepsilon = \alpha\lVert q\rVert\!\!\max_{\text{not kept}}\!\rho_j .
+\]
+Keeping the top-$M$ residuals \textbf{minimizes this bound for all queries at once}.
+\vspace{0.25cm}
+\takeaway{But if tokens are \textbf{evicted}, no query-agnostic rule\\ can have such a bound --- ours or anyone's.}
+Drop a token and the error is set by the attention mass it would have received;
+a query aligned with an evicted key drives that mass to 1. So TKV-S, H2O,
+SnapKV and KVzip are all heuristics --- judged empirically (right).
+\textbf{TKV-R is the member of the family with a guarantee --- and it ties the
+best method on Mistral-7B (0.93) and ties H2O on TinyLlama (0.77), ahead of
+SnapKV and StreamingLLM.}
+\end{block}
+
+\end{column}
+
+%% ================= COLUMN 2 =================
+\begin{column}{0.305\paperwidth}
+
+\begin{block}{Result: Query-Agnostic Needle Retrieval}
+\begin{center}
+\begin{tikzpicture}
+\begin{axis}[poster, height=14cm,
+    ybar=0.08cm, bar width=0.85cm, ymin=0, ymax=1.08,
+    symbolic x coords={TinyLlama-1.1B,Mistral-7B,Qwen2.5-14B}, xtick=data,
+    enlarge x limits=0.2, ylabel={needle top-1 accuracy},
+    grid=none, ymajorgrids,
+    every axis plot/.append style={line width=0pt,draw=none},
+    legend style={at={(0.5,1.02)},anchor=south}, legend columns=5, area legend]
+  \addplot[fill=muted!60] coordinates {(TinyLlama-1.1B,0.60)(Mistral-7B,0.60)(Qwen2.5-14B,0.60)};
+  \addlegendentry{StreamingLLM}
+  \addplot[fill=oja] coordinates {(TinyLlama-1.1B,0.77)(Mistral-7B,0.67)(Qwen2.5-14B,0.33)};
+  \addlegendentry{H2O}
+  \addplot[fill=teal] coordinates {(TinyLlama-1.1B,0.67)(Mistral-7B,0.93)(Qwen2.5-14B,0.73)};
+  \addlegendentry{SnapKV}
+  \addplot[fill=accent] coordinates {(TinyLlama-1.1B,0.93)(Mistral-7B,0.93)(Qwen2.5-14B,0.63)};
+  \addlegendentry{TKV-S (ours)}
+  \addplot[fill=good] coordinates {(TinyLlama-1.1B,0.77)(Mistral-7B,0.93)(Qwen2.5-14B,0.53)};
+  \addlegendentry{TKV-R (ours, guaranteed)}
+\end{axis}
+\end{tikzpicture}
+\end{center}
+{\footnotesize\color{muted} Matched KV memory (0.672$\times$ TinyLlama, 0.594$\times$ others), 30 prompts per bar (5 depths $\times$ 6 needles), context compressed before the question. TKV-R keeps non-selected tokens as projections, so it is the only bar with a worst-case guarantee.}
+\vspace{0.3cm}
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+TKV-S vs. & TinyLlama & Mistral-7B & Qwen-14B \\
+\midrule
+StreamingLLM & \textbf{$p{=}.005$} & \textbf{$p{=}.005$} & tie \\
+H2O & +5 (n.s.) & \textbf{$p{=}.02$} & \textbf{$p{=}.04$} \\
+SnapKV & \textbf{$p{=}.02$} & tie & $-3$ (n.s.) \\
+\bottomrule
+\end{tabular}\\[0.2cm]
+{\footnotesize\color{muted} Fisher's exact test on correct answers out of 30.}
+\end{center}
+\vspace{0.2cm}
+H2O's cumulative attention favors early tokens and collapses on late needles
+($P = 0.07$ / $0.03$ at depth 0.9 on Mistral / Qwen). Query-aware SnapKV
+(seeing the question) scores 1.00: there's real headroom left.
+\end{block}
+
+\begin{block}{Corrections Along the Way}
+\begin{itemize}
+  \item \textbf{Brand warmup.} Truncated updates are optimal only for the \emph{retained state + new token}, not the full history. Valid online certificate: $\lVert E_t\rVert_F \le \lVert E_{t_c}\rVert_F + \sum_s \sigma_{R+1}(A_s)$.
+  \item \textbf{Pre-RoPE bases}: post-RoPE roughly doubles the perplexity cost (+11.5\% vs.\ +5.6\% Mistral; +10.1\% vs.\ +5.3\% Qwen).
+  \item \textbf{Oja baselines}: storing coefficients in the arrival-time basis but reconstructing with the final one gave errors above 1.0. Fixed, OjaKV ties TKV within 0.5\%.
+\end{itemize}
+\end{block}
+
+\end{column}
+
+%% ================= COLUMN 3 =================
+\begin{column}{0.305\paperwidth}
+
+\begin{block}{When Does TKV-S Work? Measure It}
+Where do needle tokens fall in TKV's residual distribution?
+\vspace{0.3cm}
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+ & TKV residual & needle kept & TKV-S vs. \\
+ & percentile & vs.\ chance & SnapKV \\
+\midrule
+TinyLlama & 0.66 & 1.7$\times$ & \textbf{\color{accent}better} \\
+Mistral-7B & 0.64 & 1.5$\times$ & tie \\
+Qwen2.5-14B & 0.56 & 1.1$\times$ & worse \\
+\bottomrule
+\end{tabular}
+\end{center}
+\vspace{0.1cm}
+The ordering matches exactly. Separability is a \textbf{cheap per-model
+check} on a calibration prompt. Centering the basis did not change Qwen's.
+\end{block}
+
+\begin{block}{Inside the TKV Cache: TKV-R}
+In TKV the residual is free and the guarantee applies exactly: keep the
+top-residual compressed tokens exact instead of evicting them.
+\vspace{0.2cm}
+\begin{itemize}
+  \item A retained token no longer pays for coefficients it doesn't need: at the same memory that is $+33\%$ exact tokens, and $0.83 \to \textbf{0.93}$ on Mistral-7B.
+  \item Ranking by the \emph{full} two-term bound picks the same tokens as the key residual: the bound is monotone in $\max\rho^k$, so the simple rule is bound-optimal.
+  \item Same $R$, $W$, $M$ (TinyLlama): residual selection \textbf{0.67}, SnapKV scores 0.43, H2O scores 0.40.
+\end{itemize}
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+Mistral-7B, 0.59$\times$ memory & PPL & needle \\
+\midrule
+StreamingLLM & \textbf{+1.0\%} & 0.60 \\
+TKV, storage only (r64) & +5.6\% & 0.87 \\
+TKV + larger window & +1.9\% & 0.40 \\
+\textbf{\color{accent}TKV-R} r16 & +1.8\% & 0.73 \\
+\textbf{\color{accent}TKV-R} r32 & +2.5\% & \textbf{0.93} \\
+\bottomrule
+\end{tabular}
+\end{center}
+\vspace{0.1cm}
+Less than half the perplexity cost of plain TKV, at higher retrieval (0.93 vs.\ 0.87). (Eviction still wins on perplexity alone: TKV's basis is worth more as a \emph{signal} than as storage.)
+\end{block}
+
+\begin{block}{Limitations}
+\begin{itemize}
+  \item One synthetic needle format, 2K--4K context, 30 prompts per cell. RULER / LongBench and 32K+ still needed.
+  \item Weaker than SnapKV on Qwen-14B; no KVzip or quantization baseline.
+  \item Needles inside the 512-token warmup get low residuals (worse at larger $r$).
+  \item TKV-R's rank/window split is chosen on a \textbf{disjoint dev set} (30 prompts, shifted haystack windows), not on the reported prompts.
+\end{itemize}
+\end{block}
+
+\end{column}
+\end{columns}
+
+\end{frame}
+\end{document}

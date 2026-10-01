@@ -1,0 +1,22 @@
+
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 on mps...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 6580.51it/s]
+Using the latest cached version of the dataset since Salesforce/wikitext couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'wikitext-2-raw-v1' at ~/.cache/huggingface/datasets/Salesforce___wikitext/wikitext-2-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3 (last modified on Sat Jun 13 10:21:24 2026).
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (341468 > 2048). Running this sequence through the model will result in indexing errors
+  ctx=2048 budget=0.672 depths=[0.1, 0.3, 0.5, 0.7, 0.9] words=['blue', 'gold', 'dark', 'soft', 'wild', 'cold'] warmup=512 sink=64 question_len=19
+  SEL                      exact     0   0.748   0.841   0.866   0.878   0.813   0.829  1.00
+  SEL     residual/lowrank/8/768   320   0.263   0.319   0.363   0.862   0.816   0.525  0.70
+  SEL   residualkv/lowrank/8/768   320   0.264   0.317   0.364   0.861   0.815   0.524  0.70
+  SEL       snapkv/lowrank/8/768   320   0.277   0.187   0.101   0.867   0.810   0.448  0.57
+
+======================================================================================
+Query-agnostic needle retrieval at 0.672x KV memory (mean P per depth; acc = top-1)
+======================================================================================
+                    config     M   d=0.1   d=0.3   d=0.5   d=0.7   d=0.9  mean P   acc
+--------------------------------------------------------------------------------------
+                     exact     0   0.748   0.841   0.866   0.878   0.813   0.829  1.00
+    residual/lowrank/8/768   320   0.263   0.319   0.363   0.862   0.816   0.525  0.70
+  residualkv/lowrank/8/768   320   0.264   0.317   0.364   0.861   0.815   0.524  0.70
+      snapkv/lowrank/8/768   320   0.277   0.187   0.101   0.867   0.810   0.448  0.57
+======================================================================================

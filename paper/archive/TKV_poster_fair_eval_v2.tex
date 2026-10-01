@@ -1,0 +1,339 @@
+% TKV poster -- COLM 2026 Workshop, 34in x 34in (86.36cm square)
+% Build: latexmk -pdf TKV_poster.tex
+% All numbers come from results/modal/ (Mistral-7B, Qwen2.5-14B) and match paper/TKV.tex.
+\documentclass[final]{beamer}
+\usepackage[size=custom,width=86.36,height=86.36,scale=1.05]{beamerposter}
+
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+
+\newcommand{\R}{\mathbb{R}}
+
+%% ---------------- Colors ----------------
+\definecolor{ink}{HTML}{1B2430}
+\definecolor{navy}{HTML}{16324F}
+\definecolor{accent}{HTML}{D9531E}   % TKV / low-rank
+\definecolor{teal}{HTML}{1F7A8C}     % StreamingLLM / eviction
+\definecolor{soft}{HTML}{EEF3F7}
+\definecolor{muted}{HTML}{5B6B7B}
+\definecolor{good}{HTML}{1E7B45}
+\definecolor{oja}{HTML}{7A8794}      % OjaKV / post-RoPE
+\definecolor{bad}{HTML}{B3261E}
+
+%% ---------------- Beamer theme ----------------
+\setbeamertemplate{navigation symbols}{}
+\setbeamercolor{normal text}{fg=ink,bg=white}
+\setbeamercolor{structure}{fg=navy}
+\renewcommand{\familydefault}{\sfdefault}
+\setbeamertemplate{itemize item}{\color{accent}$\blacktriangleright$}
+\setbeamerfont{itemize/enumerate body}{size=\normalsize}
+
+\setbeamercolor{block title}{fg=white,bg=navy}
+\setbeamercolor{block body}{fg=ink,bg=white}
+\setbeamerfont{block title}{size=\Large,series=\bfseries}
+\setbeamertemplate{block begin}{%
+  \begin{beamercolorbox}[wd=\linewidth,leftskip=0.7cm,rightskip=0.7cm,ht=1.9cm,dp=0.7cm]{block title}%
+    \usebeamerfont{block title}\insertblocktitle
+  \end{beamercolorbox}%
+  \vskip0.4cm
+  \begin{beamercolorbox}[wd=\linewidth,leftskip=0.4cm,rightskip=0.4cm]{block body}%
+}
+\setbeamertemplate{block end}{\end{beamercolorbox}\vskip0.8cm}
+
+% highlighted "takeaway" box
+\newcommand{\takeaway}[1]{%
+  \begin{center}
+  \colorbox{soft}{\parbox{0.96\linewidth}{\vspace{0.35cm}\centering\large #1\vspace{0.35cm}}}
+  \end{center}}
+
+% big-number stat
+\newcommand{\stat}[3]{%
+  \begin{minipage}[t]{0.235\linewidth}\centering
+    {\fontsize{76}{76}\selectfont\bfseries\color{#1}#2}\\[0.4cm]
+    {\large #3}
+  \end{minipage}}
+
+%% ---------------- pgfplots style ----------------
+\pgfplotsset{
+  poster/.style={
+    width=0.9\linewidth, height=12cm,
+    axis lines=left, axis line style={line width=2pt,color=muted},
+    tick style={line width=2pt,color=muted},
+    tick label style={font=\small,color=ink},
+    label style={font=\normalsize,color=ink},
+    title style={font=\normalsize\bfseries,color=ink},
+    grid=major, major grid style={line width=1pt,color=muted!20},
+    every axis plot/.append style={line width=4pt},
+    mark size=8pt,
+    dashstyle/.style={dash pattern=on 18pt off 10pt},
+    legend style={font=\small,draw=none,fill=white,fill opacity=0.9,text opacity=1},
+    legend cell align=left,
+  }}
+
+%% ---------------- Header ----------------
+\setbeamercolor{headband}{fg=white,bg=navy}
+\setbeamertemplate{headline}{%
+  \vbox{%
+  \begin{beamercolorbox}[wd=\paperwidth]{headband}%
+    \vskip1.3cm
+    \hspace*{2.6cm}%
+    \begin{minipage}[b]{0.77\paperwidth}\raggedright
+      {\fontsize{68}{80}\selectfont\bfseries Where Does Online Low-Rank KV Compression Help?\par}
+      \vspace{0.5cm}
+      {\fontsize{50}{60}\selectfont A fair evaluation of frozen-basis (TKV), OjaKV, and eviction at 7B and 14B scale\par}
+      \vspace{1.0cm}
+      {\fontsize{44}{52}\selectfont\bfseries David Aror}\hspace{1.2cm}%
+      {\fontsize{36}{44}\selectfont\color{white!78!navy}Independent Research
+        \enspace$\cdot$\enspace tejirid.aror@gmail.com\par}
+    \end{minipage}\hfill
+    \begin{minipage}[b]{0.13\paperwidth}\raggedleft
+      {\fontsize{48}{56}\selectfont\bfseries COLM 2026\par}
+      \vspace{0.3cm}
+      {\fontsize{36}{44}\selectfont Workshop\par}
+    \end{minipage}%
+    \hspace*{2.6cm}
+    \vskip1.1cm
+  \end{beamercolorbox}\par\nointerlineskip
+  {\color{accent}\rule{\paperwidth}{0.45cm}}}%
+}
+
+\begin{document}
+\begin{frame}[t]
+\vspace{0.5cm}
+
+%% ================= KEY NUMBERS STRIP =================
+\begin{columns}[t]
+\begin{column}{0.94\paperwidth}
+\stat{accent}{2$\times$}{perplexity cost of a \emph{post}-RoPE basis\\ vs.\ pre-RoPE (both models)}\hfill
+\stat{teal}{+1.0\%}{eviction's perplexity cost at 0.59$\times$ memory\\ (low-rank: +5.3--5.6\%)}\hfill
+\stat{accent}{87\%}{needle retrieval with rank-64 TKV\\ on Mistral-7B (eviction: 60\%)}\hfill
+\stat{good}{7.9$\times$}{faster GPU decode step than the\\ full cache at 32K tokens (rank 32)}
+\par\vspace{0.4cm}
+{\color{muted!40}\rule{\linewidth}{2pt}}
+\end{column}
+\end{columns}
+
+\vspace{0.4cm}
+
+\begin{columns}[t]
+%% ================= COLUMN 1 =================
+\begin{column}{0.305\paperwidth}
+
+\begin{block}{The Question}
+KV caches grow linearly with context. Two online fixes need no calibration:
+\vspace{0.2cm}
+\begin{itemize}
+  \item \textbf{Eviction} (StreamingLLM): keep sinks + recent tokens exactly, drop the rest.
+  \item \textbf{Low-rank}: keep \emph{every} token, projected onto a rank-$R$ basis.
+\end{itemize}
+\vspace{0.2cm}
+We tested \textbf{TKV}, a low-rank cache whose basis is fit on a 512-token
+warmup and then \textbf{frozen} ($\mathcal{O}(Rd)$ per token), against a
+corrected OjaKV and against eviction \textbf{at matched KV memory}.
+\takeaway{When is keeping a compressed copy of every token\\ worth the memory?}
+\end{block}
+
+\begin{block}{Protocol}
+\begin{center}
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \fill[navy!85] (0,0) rectangle (2.5,2.2);
+  \fill[accent!70] (2.5,0) rectangle (16.5,2.2);
+  \fill[good!75] (16.5,0) rectangle (23,2.2);
+  \node[white,font=\small\bfseries] at (1.25,1.1) {sinks};
+  \node[white,font=\small\bfseries] at (9.5,1.1) {middle: low-rank \emph{or} evicted};
+  \node[white,font=\small\bfseries] at (19.75,1.1) {recent window};
+  \node[font=\small,color=muted] at (1.25,-0.7) {exact};
+  \node[font=\small,color=muted] at (19.75,-0.7) {exact};
+\end{tikzpicture}
+\end{center}
+\vspace{0.2cm}
+\begin{itemize}
+  \item \textbf{Same layout for all:} 64 sinks + 256-token window. StreamingLLM gets the low-rank bytes as \emph{extra window}: $W' = W + TR/d + R$.
+  \item \textbf{Models:} Mistral-7B, Qwen2.5-14B ($d{=}128$, 8 KV heads).
+  \item \textbf{Data} (ctx 4096, 30 windows, same scored tokens for every method): WikiText-2, PG-19, and a \textbf{shift} set (512 prose tokens, then code).
+  \item \textbf{Checks:} at $R{=}d$ or full window every hook reproduces exact logits.
+\end{itemize}
+\end{block}
+
+\begin{block}{Finding 1: Fit the Basis Before RoPE}
+\begin{center}
+\begin{tikzpicture}
+\begin{axis}[poster, height=10cm,
+    ybar=0.3cm, bar width=2.2cm, ymin=0, ymax=14,
+    symbolic x coords={Mistral-7B,Qwen2.5-14B}, xtick=data,
+    enlarge x limits=0.45,
+    ylabel={PPL increase over exact (\%)},
+    grid=none, ymajorgrids,
+    nodes near coords={+\pgfmathprintnumber[fixed,precision=1]{\pgfplotspointmeta}\%},
+    every node near coord/.append style={font=\small\bfseries},
+    every axis plot/.append style={line width=0pt,draw=none},
+    legend style={at={(0.5,1.02)},anchor=south}, legend columns=2, area legend]
+  \addplot[fill=oja] coordinates {(Mistral-7B,11.5)(Qwen2.5-14B,10.1)};
+  \addlegendentry{post-RoPE basis}
+  \addplot[fill=accent] coordinates {(Mistral-7B,5.6)(Qwen2.5-14B,5.3)};
+  \addlegendentry{pre-RoPE basis}
+\end{axis}
+\end{tikzpicture}
+\end{center}
+TKV at rank 64, WikiText-2. RoPE rotates keys by position, so a basis frozen
+on early positions can't span later keys. On TinyLlama-1.1B the post-RoPE
+basis is catastrophic (PPL 76 vs.\ 6.9).
+\end{block}
+
+\end{column}
+
+%% ================= COLUMN 2 =================
+\begin{column}{0.305\paperwidth}
+
+\begin{block}{Finding 2: A Correct OjaKV Ties TKV}
+A common streaming Oja's-rule implementation stores each token's
+coefficients in the basis \emph{at arrival}, then reconstructs with the
+\emph{final} basis, and its unnormalized step makes the basis snap to each new
+token. The frames don't match, and on real keys the error came out
+\textbf{above 1.0}: worse than storing zeros.
+\vspace{0.3cm}
+\begin{center}
+\begin{tabular}{llccc}
+\toprule
+ & & TKV & OjaKV & StreamingLLM \\
+\midrule
+Mistral-7B & WikiText-2 & +5.6\% & +5.2\% & \textbf{\color{teal}+1.0\%} \\
+           & shift      & +4.6\% & +4.2\% & \textbf{\color{teal}+0.2\%} \\[0.15cm]
+Qwen2.5-14B & WikiText-2 & +5.3\% & +5.1\% & \textbf{\color{teal}+1.0\%} \\
+           & shift      & +5.5\% & +4.9\% & \textbf{\color{teal}+0.2\%} \\
+\bottomrule
+\end{tabular}\\[0.2cm]
+{\footnotesize\color{muted} PPL increase over exact, rank 64, 0.59$\times$ memory, same warmup for TKV and OjaKV.}
+\end{center}
+\vspace{0.2cm}
+Fixed (normalized step, coefficients rotated into each new basis, same warmup
+as TKV), OjaKV is within \textbf{0.5\%} of TKV, even under the prose$\to$code
+shift. TKV's edge is \textbf{cost}, not quality.
+\end{block}
+
+\begin{block}{Finding 3: On Perplexity, Eviction Wins}
+\begin{center}
+\begin{tikzpicture}
+\begin{axis}[poster, width=0.52\linewidth, height=11cm, title={Mistral-7B},
+    xlabel={KV memory}, ylabel={PPL increase (\%)},
+    xmin=0.15, xmax=0.65, ymin=0, ymax=25, xtick={0.2,0.4,0.6},
+    legend style={at={(0.97,0.97)},anchor=north east}]
+  \addplot[color=accent,mark=*] coordinates {(0.207,19.8)(0.336,12.5)(0.594,5.6)};
+  \addlegendentry{TKV}
+  \addplot[color=teal,dashstyle,mark=square*] coordinates {(0.207,9.5)(0.336,4.7)(0.594,1.0)};
+  \addlegendentry{StreamingLLM}
+\end{axis}
+\end{tikzpicture}%
+\begin{tikzpicture}
+\begin{axis}[poster, width=0.52\linewidth, height=11cm, title={Qwen2.5-14B},
+    xlabel={KV memory},
+    xmin=0.15, xmax=0.65, ymin=0, ymax=25, xtick={0.2,0.4,0.6}, yticklabels={}]
+  \addplot[color=accent,mark=*] coordinates {(0.207,23.0)(0.336,13.7)(0.594,5.3)};
+  \addplot[color=teal,dashstyle,mark=square*] coordinates {(0.207,7.4)(0.336,3.5)(0.594,1.0)};
+\end{axis}
+\end{tikzpicture}
+\end{center}
+WikiText-2, ranks 16/32/64 vs.\ StreamingLLM with the same bytes. Eviction
+wins at every budget, and the gap widens as memory shrinks. Same on PG-19
+(Mistral +2.5\% vs.\ +0.7\%; Qwen +2.3\% vs.\ +0.9\%). A pyramid rank schedule
+is \emph{worse} than uniform rank at equal memory.
+\takeaway{Next-token prediction lives in the recent window,\\ which eviction keeps exactly.}
+\end{block}
+
+\begin{block}{Decode Cost on GPU (L40S, one layer)}
+\begin{center}
+\begin{tabular}{rrccc}
+\toprule
+Tokens & $R$ & Full cache & TKV & OjaKV \\
+\midrule
+32K & 32 & 2.83 ms & \textbf{0.36 ms} & 1.31 ms \\
+128K & 32 & 12.35 ms & \textbf{2.14 ms} & 3.33 ms \\
+128K & 64 & 12.37 ms & \textbf{5.75 ms} & 8.88 ms \\
+\bottomrule
+\end{tabular}
+\end{center}
+\vspace{0.1cm}
+The frozen basis skips OjaKV's per-token update. Matched-memory eviction reads
+a similar amount, so the gain is vs.\ the full cache.
+\end{block}
+
+\end{column}
+
+%% ================= COLUMN 3 =================
+\begin{column}{0.305\paperwidth}
+
+\begin{block}{Finding 4: Where Low-Rank Wins}
+Needle (``The special code word is \emph{blue}'') placed at depths 0.1--0.9 of
+a WikiText-2 haystack; the model is asked for it at the end.
+\vspace{0.2cm}
+\begin{center}
+\begin{tikzpicture}
+\begin{axis}[poster, height=9.5cm,
+    xlabel={Needle depth}, ylabel={$P$(needle)}, title={Mistral-7B, 4K tokens, 0.59$\times$ memory},
+    xmin=0.05, xmax=0.95, ymin=0, ymax=1, xtick={0.1,0.3,0.5,0.7,0.9},
+    legend style={at={(0.5,-0.32)},anchor=north}, legend columns=3]
+  \addplot[color=muted,mark=*] coordinates {(0.1,0.689)(0.3,0.756)(0.5,0.764)(0.7,0.752)(0.9,0.828)};
+  \addlegendentry{exact}
+  \addplot[color=accent,mark=*] coordinates {(0.1,0.598)(0.3,0.385)(0.5,0.408)(0.7,0.281)(0.9,0.266)};
+  \addlegendentry{TKV r64}
+  \addplot[color=teal,dashstyle,mark=square*] coordinates {(0.1,0.0)(0.3,0.0)(0.5,0.768)(0.7,0.766)(0.9,0.840)};
+  \addlegendentry{StreamingLLM}
+\end{axis}
+\end{tikzpicture}
+\end{center}
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+Top-1 accuracy & Exact & TKV r64 & OjaKV r64 & StreamingLLM \\
+\midrule
+Mistral-7B, 4K  & 1.00 & \textbf{\color{accent}0.87} & \textbf{0.93} & 0.60 \\
+Qwen2.5-14B, 4K & 1.00 & 0.20 & -- & \textbf{\color{teal}0.60} \\
+Qwen2.5-14B, 8K & 1.00 & 0.27 & -- & \textbf{\color{teal}0.60} \\
+\bottomrule
+\end{tabular}
+\end{center}
+\vspace{0.2cm}
+Eviction \textbf{never} retrieves early needles. Low-rank sometimes does, but
+\textbf{only at high rank} (rank 16 retrieves nothing outside the window) and
+\textbf{only on Mistral}.
+\end{block}
+
+\begin{block}{Rank or Window? (fixed 0.59$\times$ memory)}
+\begin{center}
+\begin{tabular}{rrcccc}
+\toprule
+ & & \multicolumn{2}{c}{Mistral-7B} & \multicolumn{2}{c}{Qwen2.5-14B} \\
+$R$ & window & PPL & needle & PPL & needle \\
+\midrule
+0 & 2368 & \textbf{4.64} & 0.60 & \textbf{4.02} & \textbf{0.60} \\
+16 & 1840 & 4.68 & 0.40 & 4.05 & 0.33 \\
+32 & 1312 & 4.71 & 0.53 & 4.08 & 0.33 \\
+64 & 256 & 4.85 & \textbf{0.87} & 4.19 & 0.20 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\vspace{0.1cm}
+Moving memory from window to rank hurts perplexity every step and doesn't
+help retrieval until rank 64.
+\end{block}
+
+\begin{block}{Takeaways \& Limits}
+\begin{itemize}
+  \item Default to \textbf{eviction} for language modeling; use low-rank only when evicted content must stay retrievable, at high rank, and check your model.
+  \item Fit bases \textbf{pre-RoPE}; compare against \textbf{fixed} baselines at \textbf{matched memory}.
+  \item Limits: 2K--8K context; 30 windows / 15 needle prompts per cell; exact-SVD warmup (best case); no quantization or H2O/SnapKV baseline.
+\end{itemize}
+\end{block}
+
+\end{column}
+\end{columns}
+
+\end{frame}
+\end{document}

@@ -1,0 +1,304 @@
+% TKV-R poster -- COLM 2026 Workshop, 34in x 34in (86.36cm square)
+% Build: latexmk -pdf TKV_poster.tex
+% All numbers come from results/modal/ and results/tinyllama_* and match paper/TKV.tex.
+\documentclass[final]{beamer}
+\usepackage[size=custom,width=86.36,height=86.36,scale=1.05]{beamerposter}
+
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+
+\newcommand{\R}{\mathbb{R}}
+
+%% ---------------- Colors ----------------
+\definecolor{ink}{HTML}{1B2430}
+\definecolor{navy}{HTML}{16324F}
+\definecolor{accent}{HTML}{D9531E}   % TKV-R
+\definecolor{teal}{HTML}{1F7A8C}     % StreamingLLM / eviction
+\definecolor{soft}{HTML}{EEF3F7}
+\definecolor{muted}{HTML}{5B6B7B}
+\definecolor{good}{HTML}{1E7B45}
+\definecolor{oja}{HTML}{7A8794}      % plain low-rank / baselines
+\definecolor{bad}{HTML}{B3261E}
+
+%% ---------------- Beamer theme ----------------
+\setbeamertemplate{navigation symbols}{}
+\setbeamercolor{normal text}{fg=ink,bg=white}
+\setbeamercolor{structure}{fg=navy}
+\renewcommand{\familydefault}{\sfdefault}
+\setbeamertemplate{itemize item}{\color{accent}$\blacktriangleright$}
+\setbeamerfont{itemize/enumerate body}{size=\normalsize}
+
+\setbeamercolor{block title}{fg=white,bg=navy}
+\setbeamercolor{block body}{fg=ink,bg=white}
+\setbeamerfont{block title}{size=\Large,series=\bfseries}
+\setbeamertemplate{block begin}{%
+  \begin{beamercolorbox}[wd=\linewidth,leftskip=0.7cm,rightskip=0.7cm,ht=1.9cm,dp=0.7cm]{block title}%
+    \usebeamerfont{block title}\insertblocktitle
+  \end{beamercolorbox}%
+  \vskip0.4cm
+  \begin{beamercolorbox}[wd=\linewidth,leftskip=0.4cm,rightskip=0.4cm]{block body}%
+}
+\setbeamertemplate{block end}{\end{beamercolorbox}\vskip0.8cm}
+
+\newcommand{\takeaway}[1]{%
+  \begin{center}
+  \colorbox{soft}{\parbox{0.96\linewidth}{\vspace{0.35cm}\centering\large #1\vspace{0.35cm}}}
+  \end{center}}
+
+\newcommand{\stat}[3]{%
+  \begin{minipage}[t]{0.235\linewidth}\centering
+    {\fontsize{76}{76}\selectfont\bfseries\color{#1}#2}\\[0.4cm]
+    {\large #3}
+  \end{minipage}}
+
+%% ---------------- pgfplots style ----------------
+\pgfplotsset{
+  poster/.style={
+    width=0.9\linewidth, height=12cm,
+    axis lines=left, axis line style={line width=2pt,color=muted},
+    tick style={line width=2pt,color=muted},
+    tick label style={font=\small,color=ink},
+    label style={font=\normalsize,color=ink},
+    title style={font=\normalsize\bfseries,color=ink},
+    grid=major, major grid style={line width=1pt,color=muted!20},
+    every axis plot/.append style={line width=4pt},
+    mark size=8pt,
+    legend style={font=\small,draw=none,fill=white,fill opacity=0.9,text opacity=1},
+    legend cell align=left,
+  }}
+
+%% ---------------- Header ----------------
+\setbeamercolor{headband}{fg=white,bg=navy}
+\setbeamertemplate{headline}{%
+  \vbox{%
+  \begin{beamercolorbox}[wd=\paperwidth]{headband}%
+    \vskip1.3cm
+    \hspace*{2.6cm}%
+    \begin{minipage}[b]{0.77\paperwidth}\raggedright
+      {\fontsize{80}{94}\selectfont\bfseries Keep What the Basis Cannot Explain\par}
+      \vspace{0.5cm}
+      {\fontsize{50}{60}\selectfont Residual-guided retention for online low-rank KV caches\par}
+      \vspace{1.0cm}
+      {\fontsize{44}{52}\selectfont\bfseries David Aror}\hspace{1.2cm}%
+      {\fontsize{36}{44}\selectfont\color{white!78!navy}Independent Research
+        \enspace$\cdot$\enspace tejirid.aror@gmail.com\par}
+    \end{minipage}\hfill
+    \begin{minipage}[b]{0.13\paperwidth}\raggedleft
+      {\fontsize{48}{56}\selectfont\bfseries COLM 2026\par}
+      \vspace{0.3cm}
+      {\fontsize{36}{44}\selectfont Workshop\par}
+    \end{minipage}%
+    \hspace*{2.6cm}
+    \vskip1.1cm
+  \end{beamercolorbox}\par\nointerlineskip
+  {\color{accent}\rule{\paperwidth}{0.45cm}}}%
+}
+
+\begin{document}
+\begin{frame}[t]
+\vspace{0.5cm}
+
+%% ================= KEY NUMBERS STRIP =================
+\begin{columns}[t]
+\begin{column}{0.94\paperwidth}
+\stat{accent}{0.93}{needle retrieval, TKV-R on Mistral-7B\\ (eviction 0.60) at 0.59$\times$ KV memory}\hfill
+\stat{accent}{+2.5\%}{perplexity cost of TKV-R\\ (plain low-rank: +5.6\%)}\hfill
+\stat{teal}{0.73 vs 0.20}{retrieval: residual vs.\ random choice\\ of the same number of tokens}\hfill
+\stat{good}{free}{the residual falls out of the projection:\\ $\rho^2 = \lVert k\rVert^2 - \lVert B k\rVert^2$}
+\par\vspace{0.4cm}
+{\color{muted!40}\rule{\linewidth}{2pt}}
+\end{column}
+\end{columns}
+
+\vspace{0.4cm}
+
+\begin{columns}[t]
+%% ================= COLUMN 1 =================
+\begin{column}{0.305\paperwidth}
+
+\begin{block}{Eviction Forgets, Low-Rank Blurs}
+At matched memory (Mistral-7B, Qwen2.5-14B, 4K context):
+\vspace{0.2cm}
+\begin{itemize}
+  \item \textbf{Eviction} (StreamingLLM) wins perplexity (+1.0\%) but can never recall an evicted token.
+  \item \textbf{Low-rank} (frozen basis, TKV) keeps every token but costs +5--6\% perplexity, and recalls some evicted facts.
+\end{itemize}
+\vspace{0.2cm}
+Why low-rank blurs the wrong tokens: an SVD basis keeps the directions
+\emph{shared} by many tokens. A token that carries new information is exactly
+one the basis explains poorly.
+\takeaway{The tokens worth remembering are the ones\\ with the largest projection residual.}
+\end{block}
+
+\begin{block}{TKV-R: Residual-Guided Retention}
+\begin{center}
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \fill[navy!85] (0,0) rectangle (2.4,2.2);
+  \fill[oja!70] (2.4,0) rectangle (16.2,2.2);
+  \foreach \x in {4.1,6.9,7.6,11.3,13.8} {\fill[accent] (\x,0) rectangle (\x+0.55,2.2);}
+  \fill[good!75] (16.2,0) rectangle (23,2.2);
+  \node[white,font=\small\bfseries] at (1.2,1.1) {sinks};
+  \node[white,font=\small\bfseries] at (9.3,-0.7) {};
+  \node[white,font=\small\bfseries] at (19.6,1.1) {recent window};
+  \node[font=\small,color=oja!60!black] at (9.3,-0.75) {middle: rank-$R$ coefficients};
+  \node[font=\small\bfseries,color=accent] at (9.3,2.9) {top-$M$ residual tokens kept exact};
+\end{tikzpicture}
+\end{center}
+\vspace{0.2cm}
+\begin{itemize}
+  \item Freeze a rank-$R$ basis $B$ after a 512-token warmup (fit \textbf{pre-RoPE}).
+  \item Each token leaving the window: store $c = Bk$ and its residual $\rho = \lVert k - B^\top c\rVert$.
+  \item A \textbf{min-heap of capacity $M$} keyed by $\rho$ keeps the top-$M$ residual tokens exact; the loser keeps only $c$. Cost: $\mathcal{O}(Rd + \log M)$ per token.
+  \item Budget = rank $R$ + window $W$ + $M$ exact tokens, matched byte-for-byte to eviction.
+\end{itemize}
+\end{block}
+
+\begin{block}{A Guarantee for Every Future Query}
+RoPE is a rotation, so for any query $q$ and compressed key $j$:
+\[
+\bigl|q^\top \mathcal{R}_j k_j - q^\top \mathcal{R}_j \hat k_j\bigr| \le \lVert q\rVert\,\rho_j .
+\]
+With $\varepsilon = \alpha\lVert q\rVert\max_{\text{compressed}}\rho_j$, attention weights move by
+$\lVert p - \hat p\rVert_1 \le e^{2\varepsilon} - 1$. Keeping the top-$M$ residuals
+\textbf{minimizes this bound for all queries at once}: no need to know which
+queries will come, unlike attention-score eviction.
+\end{block}
+
+\end{column}
+
+%% ================= COLUMN 2 =================
+\begin{column}{0.305\paperwidth}
+
+\begin{block}{Result: A Better Tradeoff on Mistral-7B}
+\begin{center}
+\begin{tikzpicture}
+\begin{axis}[poster, height=14cm,
+    xlabel={Perplexity increase over exact (\%)}, ylabel={Needle top-1 accuracy},
+    xmin=0, xmax=6.5, ymin=0.1, ymax=1.02, title={Mistral-7B, 0.59$\times$ memory, WikiText-2 + needle}]
+  \addplot[only marks, mark=square*, color=teal] coordinates {(1.0,0.60)};
+  \addplot[only marks, mark=*, color=oja] coordinates {(5.6,0.87)(5.2,0.93)(1.9,0.40)};
+  \addplot[only marks, mark=triangle*, mark size=10pt, color=muted] coordinates {(3.7,0.20)};
+  \addplot[only marks, mark=diamond*, mark size=12pt, color=accent] coordinates {(1.8,0.73)(2.5,0.93)};
+  \node[anchor=west,font=\small\bfseries,color=teal] at (axis cs:1.15,0.60) {StreamingLLM};
+  \node[anchor=east,font=\small,color=oja!70!black] at (axis cs:5.45,0.87) {TKV r64};
+  \node[anchor=east,font=\small,color=oja!70!black] at (axis cs:5.05,0.95) {OjaKV r64};
+  \node[anchor=west,font=\small,color=oja!70!black] at (axis cs:2.05,0.40) {low-rank, larger window};
+  \node[anchor=west,font=\small,color=muted] at (axis cs:3.85,0.20) {random retention};
+  \node[anchor=west,font=\small\bfseries,color=accent] at (axis cs:1.95,0.73) {TKV-R r16};
+  \node[anchor=west,font=\small\bfseries,color=accent] at (axis cs:2.65,0.93) {TKV-R r32};
+  \draw[-{Latex[length=0.6cm]},line width=3pt,color=accent!60] (axis cs:4.8,0.55) -- (axis cs:3.0,0.85);
+  \node[font=\small\bfseries,color=accent!80!black,align=center] at (axis cs:4.9,0.47) {better};
+\end{axis}
+\end{tikzpicture}
+\end{center}
+\vspace{0.2cm}
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+ & \multicolumn{2}{c}{Mistral-7B} & \multicolumn{2}{c}{Qwen2.5-14B} \\
+ & PPL & needle & PPL & needle \\
+\midrule
+StreamingLLM & \textbf{+1.0\%} & 0.60 & \textbf{+1.0\%} & \textbf{0.60} \\
+TKV r64 & +5.6\% & 0.87 & +5.3\% & 0.20 \\
+Random retention & +3.7\% & 0.20 & +2.8\% & 0.20 \\
+\textbf{\color{accent}TKV-R r16} & +1.8\% & 0.73 & +1.3\% & 0.20 \\
+\textbf{\color{accent}TKV-R r32} & +2.5\% & \textbf{0.93} & +1.9\% & 0.20 \\
+\bottomrule
+\end{tabular}\\[0.2cm]
+{\footnotesize\color{muted} All at 0.594$\times$ KV memory, 4K context; WikiText-2 (30 windows) and 15 needle prompts.}
+\end{center}
+\vspace{0.2cm}
+At the same memory and perplexity (4.680 vs.\ 4.682), spending the budget on
+high-residual tokens instead of a longer window lifts retrieval from
+\textbf{0.40 to 0.73}. On TinyLlama-1.1B TKV-R reaches \textbf{0.87--1.00}
+(eviction 0.60, low-rank 0.47).
+\end{block}
+
+\begin{block}{Corrections Along the Way}
+\begin{itemize}
+  \item \textbf{Brand warmup.} Truncated updates are optimal only for the \emph{retained state + new token}, not the full history. Valid online certificate: $\lVert E_t\rVert_F \le \lVert E_{t_c}\rVert_F + \sum_s \sigma_{R+1}(A_s)$.
+  \item \textbf{Pre-RoPE bases}: post-RoPE costs 2$\times$ the perplexity (+11.5\% vs.\ +5.6\% Mistral; +10.1\% vs.\ +5.3\% Qwen).
+  \item \textbf{Oja baselines}: storing coefficients in the arrival-time basis but reconstructing with the final one gave errors above 1.0. Fixed, OjaKV ties TKV within 0.5\%.
+\end{itemize}
+\end{block}
+
+\end{column}
+
+%% ================= COLUMN 3 =================
+\begin{column}{0.305\paperwidth}
+
+\begin{block}{When Does It Work? Measure It}
+Does retention actually keep the needle? Share of needle tokens kept exact
+for the final query, and the needle's percentile in the residual distribution.
+\vspace{0.3cm}
+\begin{center}
+\begin{tikzpicture}
+\begin{axis}[poster, height=10.5cm,
+    ybar=0.25cm, bar width=1.7cm, ymin=0, ymax=0.5,
+    symbolic x coords={TinyLlama-1.1B,Mistral-7B,Qwen2.5-14B}, xtick=data,
+    enlarge x limits=0.25, ylabel={needle tokens kept exact},
+    ytick={0,0.1,0.2,0.3,0.4,0.5}, yticklabel style={/pgf/number format/fixed},
+    grid=none, ymajorgrids,
+    every axis plot/.append style={line width=0pt,draw=none},
+    legend style={at={(0.5,1.02)},anchor=south}, legend columns=2, area legend]
+  \addplot[fill=oja] coordinates {(TinyLlama-1.1B,0.144)(Mistral-7B,0.262)(Qwen2.5-14B,0.260)};
+  \addlegendentry{random}
+  \addplot[fill=accent] coordinates {(TinyLlama-1.1B,0.244)(Mistral-7B,0.381)(Qwen2.5-14B,0.291)};
+  \addlegendentry{residual}
+\end{axis}
+\end{tikzpicture}
+\end{center}
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+ & residual pct. & kept vs.\ chance & retrieval gain \\
+\midrule
+TinyLlama & 0.66 & 1.7$\times$ & 0.53 $\to$ \textbf{0.87} \\
+Mistral-7B & 0.64 & 1.5$\times$ & 0.20 $\to$ \textbf{0.73} \\
+Qwen2.5-14B & 0.56 & 1.1$\times$ & 0.20 $\to$ 0.20 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\vspace{0.1cm}
+Qwen's needle tokens barely stand out in residual, and retention can't find
+them. Centering the basis (removing key bias) didn't change this. Residual
+separability is a \textbf{cheap per-model check} before deploying.
+\end{block}
+
+\begin{block}{Decode Cost on GPU (L40S, one layer)}
+\begin{center}
+\begin{tabular}{rrccc}
+\toprule
+Tokens & $R$ & Full cache & Frozen basis & OjaKV \\
+\midrule
+32K & 32 & 2.83 ms & \textbf{0.36 ms} & 1.31 ms \\
+128K & 32 & 12.35 ms & \textbf{2.14 ms} & 3.33 ms \\
+128K & 64 & 12.37 ms & \textbf{5.75 ms} & 8.88 ms \\
+\bottomrule
+\end{tabular}
+\end{center}
+\vspace{0.1cm}
+A frozen basis skips per-token basis updates; TKV-R only adds a heap
+operation per evicted token (not yet timed end to end).
+\end{block}
+
+\begin{block}{Limits}
+\begin{itemize}
+  \item 2K--4K context; 30 windows / 15 needle prompts per cell; single needle format (no RULER / LongBench yet).
+  \item Gains are model-dependent (none on Qwen2.5-14B retrieval).
+  \item Exact-SVD warmup; heap simulated in a teacher-forced pass; no quantization or SnapKV baseline.
+\end{itemize}
+\end{block}
+
+\end{column}
+\end{columns}
+
+\end{frame}
+\end{document}

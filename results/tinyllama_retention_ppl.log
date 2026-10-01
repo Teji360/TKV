@@ -1,0 +1,99 @@
+
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 on mps (bfloat16)...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 6075.11it/s]
+Using the latest cached version of the dataset since Salesforce/wikitext couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'wikitext-2-raw-v1' at ~/.cache/huggingface/datasets/Salesforce___wikitext/wikitext-2-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3 (last modified on Sat Jun 13 10:21:24 2026).
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (341469 > 2048). Running this sequence through the model will result in indexing errors
+Loading wikitext2...
+  corpus tokens: 341,469  layers=22  head_dim=64
+  ctx=2048 stride=512 warmup=512 sink=64 window=256 max_windows=10 pre_rope=True
+      exact                      -  ppl=8.252  ppl_post=8.350  mem=1.000  (1.53s/window)
+   tkv_sink                   r=32  ppl=8.493  ppl_post=8.614  mem=0.672  (2.12s/window)
+  streaming_llm                   r=32  ppl=8.362  ppl_post=8.470  mem=0.672  (1.52s/window)
+
+===================================================================
+Perplexity (lower = better); mem = KV bytes / exact
+===================================================================
+   method                  ranks  PPL(all)  PPL(post)    mem  s/win
+-------------------------------------------------------------------
+    exact                      -     8.252      8.350  1.000   1.53
+ tkv_sink                   r=32     8.493      8.614  0.672   2.12
+streaming_llm                   r=32     8.362      8.470  0.672   1.52
+===================================================================
+tokens scored: all=6,655  post-freeze=6,143  windows=10
+
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 on mps (bfloat16)...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 6944.90it/s]
+Using the latest cached version of the dataset since Salesforce/wikitext couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'wikitext-2-raw-v1' at ~/.cache/huggingface/datasets/Salesforce___wikitext/wikitext-2-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3 (last modified on Sat Jun 13 10:21:24 2026).
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (341469 > 2048). Running this sequence through the model will result in indexing errors
+Loading wikitext2...
+  corpus tokens: 341,469  layers=22  head_dim=64
+  ctx=2048 stride=512 warmup=512 sink=64 window=256 max_windows=10 pre_rope=True
+   tkv_sink                   r=16  ppl=8.645  ppl_post=8.780  mem=0.672  (2.31s/window)
+
+===================================================================
+Perplexity (lower = better); mem = KV bytes / exact
+===================================================================
+   method                  ranks  PPL(all)  PPL(post)    mem  s/win
+-------------------------------------------------------------------
+tkv_sink+res0.3056                   r=16     8.645      8.780  0.672   2.31
+===================================================================
+tokens scored: all=6,655  post-freeze=6,143  windows=10
+
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 on mps (bfloat16)...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 6703.10it/s]
+Using the latest cached version of the dataset since Salesforce/wikitext couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'wikitext-2-raw-v1' at ~/.cache/huggingface/datasets/Salesforce___wikitext/wikitext-2-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3 (last modified on Sat Jun 13 10:21:24 2026).
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (341469 > 2048). Running this sequence through the model will result in indexing errors
+Loading wikitext2...
+  corpus tokens: 341,469  layers=22  head_dim=64
+  ctx=2048 stride=512 warmup=512 sink=64 window=256 max_windows=10 pre_rope=True
+   tkv_sink                    r=8  ppl=8.722  ppl_post=8.866  mem=0.672  (2.32s/window)
+
+===================================================================
+Perplexity (lower = better); mem = KV bytes / exact
+===================================================================
+   method                  ranks  PPL(all)  PPL(post)    mem  s/win
+-------------------------------------------------------------------
+tkv_sink+res0.4583                    r=8     8.722      8.866  0.672   2.32
+===================================================================
+tokens scored: all=6,655  post-freeze=6,143  windows=10
+
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 on mps (bfloat16)...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 7835.01it/s]
+Using the latest cached version of the dataset since Salesforce/wikitext couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'wikitext-2-raw-v1' at ~/.cache/huggingface/datasets/Salesforce___wikitext/wikitext-2-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3 (last modified on Sat Jun 13 10:21:24 2026).
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (341469 > 2048). Running this sequence through the model will result in indexing errors
+Loading wikitext2...
+  corpus tokens: 341,469  layers=22  head_dim=64
+  ctx=2048 stride=512 warmup=512 sink=64 window=256 max_windows=10 pre_rope=True
+   tkv_sink                   r=16  ppl=8.993  ppl_post=9.164  mem=0.672  (2.32s/window)
+
+===================================================================
+Perplexity (lower = better); mem = KV bytes / exact
+===================================================================
+   method                  ranks  PPL(all)  PPL(post)    mem  s/win
+-------------------------------------------------------------------
+tkv_sink+ran0.3056                   r=16     8.993      9.164  0.672   2.32
+===================================================================
+tokens scored: all=6,655  post-freeze=6,143  windows=10
+
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 on mps (bfloat16)...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 7529.29it/s]
+Using the latest cached version of the dataset since Salesforce/wikitext couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'wikitext-2-raw-v1' at ~/.cache/huggingface/datasets/Salesforce___wikitext/wikitext-2-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3 (last modified on Sat Jun 13 10:21:24 2026).
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (341469 > 2048). Running this sequence through the model will result in indexing errors
+Loading wikitext2...
+  corpus tokens: 341,469  layers=22  head_dim=64
+  ctx=2048 stride=512 warmup=512 sink=64 window=256 max_windows=10 pre_rope=True
+   tkv_sink                    r=8  ppl=9.054  ppl_post=9.232  mem=0.672  (2.31s/window)
+
+===================================================================
+Perplexity (lower = better); mem = KV bytes / exact
+===================================================================
+   method                  ranks  PPL(all)  PPL(post)    mem  s/win
+-------------------------------------------------------------------
+tkv_sink+ran0.4583                    r=8     9.054      9.232  0.672   2.31
+===================================================================
+tokens scored: all=6,655  post-freeze=6,143  windows=10

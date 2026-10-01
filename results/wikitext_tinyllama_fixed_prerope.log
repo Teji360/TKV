@@ -1,0 +1,31 @@
+
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 on mps (bfloat16)...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights:  84%|████████▍ | 169/201 [00:00<00:00, 1687.70it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 1876.29it/s]
+Using the latest cached version of the dataset since Salesforce/wikitext couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'wikitext-2-raw-v1' at ~/.cache/huggingface/datasets/Salesforce___wikitext/wikitext-2-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3 (last modified on Sat Jun 13 10:21:24 2026).
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (341469 > 2048). Running this sequence through the model will result in indexing errors
+Loading WikiText-2...
+  corpus tokens: 341,469  layers=22  head_dim=64
+  ctx=2048 stride=512 warmup=512 sink=64 window=256 max_windows=40 pre_rope=True
+      exact                      -  ppl=6.869  ppl_post=6.862  mem=1.000  (4.18s/window)
+   tkv_sink                   r=16  ppl=7.882  ppl_post=7.900  mem=0.414  (5.50s/window)
+   tkv_sink                   r=24  ppl=7.340  ppl_post=7.344  mem=0.543  (5.48s/window)
+   tkv_sink                   r=32  ppl=7.133  ppl_post=7.132  mem=0.672  (5.87s/window)
+   tkv_sink                   r=48  ppl=6.948  ppl_post=6.943  mem=0.930  (5.85s/window)
+   tkv_sink    pyr[48, 32, 24, 16]  ppl=7.445  ppl_post=7.452  mem=0.654  (5.82s/window)
+  skipping oja_sink: not available
+
+===================================================================
+WikiText-2 perplexity (lower = better); mem = KV bytes / exact
+===================================================================
+   method                  ranks  PPL(all)  PPL(post)    mem  s/win
+-------------------------------------------------------------------
+    exact                      -     6.869      6.862  1.000   4.18
+ tkv_sink                   r=16     7.882      7.900  0.414   5.50
+ tkv_sink                   r=24     7.340      7.344  0.543   5.48
+ tkv_sink                   r=32     7.133      7.132  0.672   5.87
+ tkv_sink                   r=48     6.948      6.943  0.930   5.85
+ tkv_sink    pyr[48, 32, 24, 16]     7.445      7.452  0.654   5.82
+===================================================================
+tokens scored: all=22,015  post-freeze=21,503  windows=40
+total wall time: 1333s

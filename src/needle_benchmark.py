@@ -1,283 +1,139 @@
 """
-Needle-in-a-Haystack benchmark for KV cache compression methods.
+Needle-in-a-Haystack retrieval for KV cache compression methods.
 
-Inserts a single secret word into a long filler context at various depths,
-then asks the model to recall it. Measures retrieval probability (P(correct token))
-as a function of context length and compression method.
+A one-sentence needle ("The special code word is <word>.") is inserted into
+real WikiText-2 text at several depths; the prompt ends with a question whose
+answer is the needle word. Reports P(needle token) and top-1 accuracy of the
+next-token prediction, per method / rank / depth.
 
-Mirrors the RULER NIAH evaluation used in the OjaKV paper (arXiv:2509.21623).
+This is where eviction and low-rank compression differ: StreamingLLM drops
+tokens outside its sink + recent window entirely, while TKV / OjaKV keep a
+compressed copy of every token. Methods come from wikitext_benchmark.METHODS
+(exact, tkv_sink, oja_sink, streaming_llm), with the same memory matching.
 """
 
 import argparse
-import math
-import random
-import sys
-import torch
 from typing import List, Tuple
 
-from model_hooks import (
-    load_model,
-    patch_model_sinked,
-    patch_model_oja,
-    unpatch_model,
-    _default_pyramid,
-)
+import torch
 
-# ---------------------------------------------------------------------------
-# Needle design
-# ---------------------------------------------------------------------------
+from model_hooks import load_model, unpatch_model
+from tkv_sink_hook import _DIAG
+from wikitext_benchmark import METHODS, load_wikitext2, memory_ratio
 
-# Single-token words in LLaMA/Mistral tokenizers — verified empirically.
-NEEDLE_WORDS = ["blue", "gold", "dark", "soft", "tall", "wild", "cold", "warm"]
-
-FILLER = (
-    "In the field of natural language processing, researchers have made significant "
-    "advances in understanding how language models process and generate text. "
-    "These models learn statistical patterns from large corpora and use this knowledge "
-    "to predict the most likely next token in a sequence. The architecture relies on "
-    "self-attention mechanisms that allow each token to interact with all previous tokens. "
-    "Modern large language models contain billions of parameters and are trained on "
-    "trillions of tokens of web text, books, and code. "
-)
-
-NEEDLE_TEMPLATE = "The special code word is {word}. Remember it carefully. "
-QUESTION_TEMPLATE = "Based on the passage above, what is the special code word? The special code word is"
+NEEDLE_WORDS = ["blue", "gold", "dark", "soft", "wild", "cold"]
+NEEDLE_TEMPLATE = " The special code word is {word}. Remember it. "
+QUESTION = "\n\nQuestion: what is the special code word? Answer: The special code word is"
 
 
-# ---------------------------------------------------------------------------
-# Prompt construction
-# ---------------------------------------------------------------------------
+def build_prompt(tok, haystack: List[int], ctx_len: int, word: str, depth: float,
+                 offset: int) -> Tuple[List[int], int, int, int]:
+    """Returns (input_ids, needle_token_id, needle_start, needle_end)."""
+    needle = tok.encode(NEEDLE_TEMPLATE.format(word=word), add_special_tokens=False)
+    question = tok.encode(QUESTION, add_special_tokens=False)
+    bos = [tok.bos_token_id] if tok.bos_token_id is not None else []
+    n_fill = ctx_len - len(bos) - len(needle) - len(question)
+    fill = haystack[offset:offset + n_fill]
+    pos = int(n_fill * depth)
+    ids = bos + fill[:pos] + needle + fill[pos:] + question
+    answer = tok.encode(" " + word, add_special_tokens=False)[0]
+    return ids, answer, len(bos) + pos, len(bos) + pos + len(needle)
 
-def build_prompt(
-    tokenizer,
-    target_len: int,
-    needle_word: str,
-    needle_depth: float = 0.5,
-    max_context: int = 131072,
-) -> Tuple[List[int], int]:
-    """
-    Returns (input_ids, needle_token_id).
-
-    Fills to approximately target_len tokens:
-      [filler × A] [needle sentence] [filler × B] [question]
-    Needle is placed at needle_depth * target_len from the start.
-    """
-    needle_str = NEEDLE_TEMPLATE.format(word=needle_word)
-    question_str = QUESTION_TEMPLATE
-
-    needle_ids = tokenizer.encode(needle_str, add_special_tokens=False)
-    question_ids = tokenizer.encode(question_str, add_special_tokens=False)
-    filler_ids = tokenizer.encode(FILLER, add_special_tokens=False)
-
-    # Tokens reserved for needle + question
-    reserved = len(needle_ids) + len(question_ids)
-    filler_budget = max(0, target_len - reserved)
-
-    needle_pos_tokens = int(filler_budget * needle_depth)
-    before_tokens = needle_pos_tokens
-    after_tokens = filler_budget - before_tokens
-
-    def tile(ids, n):
-        out = []
-        while len(out) < n:
-            out.extend(ids)
-        return out[:n]
-
-    before = tile(filler_ids, before_tokens)
-    after  = tile(filler_ids, after_tokens)
-
-    # BOS token if the tokenizer uses one
-    bos = [tokenizer.bos_token_id] if tokenizer.bos_token_id is not None else []
-    input_ids = bos + before + needle_ids + after + question_ids
-
-    # Clip to model's max context
-    if len(input_ids) > max_context:
-        input_ids = input_ids[:max_context]
-
-    # Token id of the needle word
-    word_ids = tokenizer.encode(" " + needle_word, add_special_tokens=False)
-    if not word_ids:
-        word_ids = tokenizer.encode(needle_word, add_special_tokens=False)
-    needle_token_id = word_ids[0]
-
-    return input_ids, needle_token_id
-
-
-# ---------------------------------------------------------------------------
-# Single-trial evaluation
-# ---------------------------------------------------------------------------
 
 @torch.no_grad()
-def eval_retrieval(
-    model,
-    input_ids: List[int],
-    needle_token_id: int,
-    device: str,
-) -> float:
-    """
-    Returns P(needle_token | context) — the softmax probability of the correct
-    next token immediately after the question prompt.
-    """
-    ids = torch.tensor([input_ids], dtype=torch.long, device=device)
-    with torch.no_grad():
-        out = model(ids, use_cache=False)
-    logits = out.logits[0, -1]          # (vocab_size,)
-    probs = torch.softmax(logits.float(), dim=-1)
-    return probs[needle_token_id].item()
+def retrieve(model, ids: List[int], answer: int, device: str) -> Tuple[float, bool]:
+    logits = model(torch.tensor([ids], device=device), use_cache=False).logits[0, -1].float()
+    return torch.softmax(logits, -1)[answer].item(), int(logits.argmax()) == answer
 
 
-# ---------------------------------------------------------------------------
-# Full sweep
-# ---------------------------------------------------------------------------
+def run(args):
+    print(f"\nLoading {args.model} on {args.device}...")
+    model, tok = load_model(args.model, device=args.device)
+    cfg = model.config
+    n_layers = cfg.num_hidden_layers
+    d = getattr(cfg, "head_dim", None) or cfg.hidden_size // cfg.num_attention_heads
+    haystack = tok.encode(load_wikitext2(), add_special_tokens=False)
+    words = NEEDLE_WORDS[:args.trials]
+    print(f"  ctx={args.ctx_lens} depths={args.depths} words={words} warmup={args.warmup_len} "
+          f"sink={args.sink_len} window={args.window_len} pre_rope={args.pre_rope}")
 
-def run_needle_sweep(
-    model_name: str,
-    context_lens: List[int],
-    n_trials: int = 5,
-    sink_len: int = 64,
-    window_len: int = 64,
-    warmup_len: int = 512,
-    needle_depth: float = 0.5,
-    device: str = "cpu",
-    dtype=torch.bfloat16,
-    oja_T_max_cap: int = 32768,
-) -> dict:
-    """
-    Runs needle retrieval at each context length for three methods:
-      - full_kv:  exact attention (baseline)
-      - sinked:   our frozen-basis + sink+recent (proposed)
-      - oja:      bare Oja rule (OjaKV equivalent baseline)
+    configs = [("exact", "-", None)]
+    for method in args.methods:
+        ranks = args.oja_ranks if method == "oja_sink" else args.ranks
+        configs += [(method, f"r={r}", [r]) for r in ranks]
 
-    Returns nested dict: results[method][context_len] = mean retrieval probability.
-    """
-    print(f"\nLoading {model_name}...")
-    model, tok = load_model(model_name, device=device, dtype=dtype)
-    n_layers = model.config.num_hidden_layers
-    pyramid_ranks = _default_pyramid(n_layers)
-
-    max_ctx = getattr(model.config, "max_position_embeddings", 131072)
-    print(f"  layers={n_layers}  max_ctx={max_ctx}  pyramid_avg={sum(pyramid_ranks)/len(pyramid_ranks):.1f}")
-
-    results = {m: {} for m in ("full_kv", "sinked", "oja")}
-    words = NEEDLE_WORDS
-
-    for ctx_len in context_lens:
-        if ctx_len > max_ctx:
-            print(f"  Skipping ctx={ctx_len:,} — exceeds model max_position_embeddings {max_ctx}")
-            for m in results:
-                results[m][ctx_len] = None
-            continue
-
-        scores = {m: [] for m in results}
-        for trial in range(n_trials):
-            word = words[trial % len(words)]
-            input_ids, needle_tok = build_prompt(tok, ctx_len, word, needle_depth, max_ctx)
-            actual_len = len(input_ids)
-
-            # Full KV
+    header = f"{'ctx':>6} {'method':>13} {'ranks':>6} {'mem':>6} " + " ".join(f"{'d=' + str(x):>11}" for x in args.depths) + f" {'mean P':>7} {'acc':>5}"
+    rows = []
+    for ctx in args.ctx_lens:
+        for method, label, ranks in configs:
+            orig = None
+            if ranks is not None:
+                extra = {"ctx_len": ctx} if method == "streaming_llm" else {"pre_rope": args.pre_rope}
+                if method == "tkv_sink" and args.retain_frac > 0:
+                    extra.update(retain_frac=args.retain_frac, retain_by=args.retain_by)
+                if method == "tkv_sink" and args.center:
+                    extra["center"] = True
+                orig = METHODS[method](model, ranks, warmup_len=args.warmup_len,
+                                       sink_len=args.sink_len, window_len=args.window_len, **extra)
             try:
-                p = eval_retrieval(model, input_ids, needle_tok, device)
-                scores["full_kv"].append(p)
-            except RuntimeError as e:
-                if "out of memory" in str(e).lower():
-                    scores["full_kv"].append(float("nan"))
-                    print(f"    full_kv OOM at ctx={ctx_len:,}")
-                else:
-                    raise
-
-            # Sinked (our method)
-            orig = patch_model_sinked(model, sink_len, window_len, warmup_len, pyramid_ranks)
-            try:
-                p = eval_retrieval(model, input_ids, needle_tok, device)
-                scores["sinked"].append(p)
-            except RuntimeError as e:
-                scores["sinked"].append(float("nan"))
-                if "out of memory" in str(e).lower():
-                    print(f"    sinked OOM at ctx={ctx_len:,}")
-                else:
-                    raise
+                per_depth, hits = [], 0
+                _DIAG["stats"] = []
+                for depth in args.depths:
+                    ps = []
+                    for t, word in enumerate(words):
+                        ids, ans, a, e = build_prompt(tok, haystack, ctx, word, depth, offset=t * ctx)
+                        _DIAG["span"] = (a, e) if args.diag and ranks is not None else None
+                        p, hit = retrieve(model, ids, ans, args.device)
+                        _DIAG["span"] = None
+                        ps.append(p)
+                        hits += hit
+                    per_depth.append(sum(ps) / len(ps))
             finally:
-                unpatch_model(model, orig)
+                if orig is not None:
+                    unpatch_model(model, orig)
+            keep = args.retain_frac if method == "tkv_sink" else 0.0
+            mem = 1.0 if ranks is None else memory_ratio(ranks, n_layers, ctx, d, args.sink_len,
+                                                         args.window_len, keep)
+            if keep:
+                method = f"{method}+{args.retain_by[:3]}{keep:g}"
+            if args.center and ranks is not None and method.startswith("tkv_sink"):
+                method += "+c"
+            if _DIAG["stats"]:
+                kept, pct = zip(*_DIAG["stats"])
+                print(f"  DIAG {ctx} {method} {label}: needle tokens kept exact = {sum(kept) / len(kept):.3f}, "
+                      f"mean residual percentile = {sum(pct) / len(pct):.3f}", flush=True)
+            acc = hits / (len(words) * len(args.depths))
+            row = (f"{ctx:>6} {method:>20} {label:>6} {mem:>6.3f} "
+                   + " ".join(f"{p:>11.3f}" for p in per_depth)
+                   + f" {sum(per_depth) / len(per_depth):>7.3f} {acc:>5.2f}")
+            rows.append(row)
+            print(f"  NIAH {row}", flush=True)
 
-            # OjaKV baseline
-            orig = patch_model_oja(model, pyramid_ranks)
-            try:
-                p = eval_retrieval(model, input_ids, needle_tok, device)
-                scores["oja"].append(p)
-            except RuntimeError as e:
-                scores["oja"].append(float("nan"))
-                if "out of memory" in str(e).lower():
-                    print(f"    oja OOM at ctx={ctx_len:,}")
-                else:
-                    raise
-            finally:
-                unpatch_model(model, orig)
-
-            print(f"  ctx={actual_len:6,}  trial={trial+1}/{n_trials}  word={word!r:6}"
-                  f"  full={scores['full_kv'][-1]:.4f}"
-                  f"  sinked={scores['sinked'][-1]:.4f}"
-                  f"  oja={scores['oja'][-1]:.4f}")
-
-        def nanmean(xs):
-            valid = [x for x in xs if not math.isnan(x)]
-            return sum(valid) / len(valid) if valid else float("nan")
-
-        for m in results:
-            results[m][ctx_len] = nanmean(scores[m])
-
-    return results
-
-
-def print_results(results: dict, context_lens: List[int]):
-    methods = list(results.keys())
-    header = f"{'ctx_len':>10}" + "".join(f"  {m:>12}" for m in methods)
     print("\n" + "=" * len(header))
-    print("Needle-in-a-Haystack Retrieval Probability (higher = better)")
+    print("Needle-in-a-Haystack: mean P(needle) per depth (higher = better); acc = top-1 accuracy")
     print("=" * len(header))
     print(header)
     print("-" * len(header))
-    for ctx in context_lens:
-        row = f"{ctx:>10,}"
-        for m in methods:
-            v = results[m].get(ctx)
-            row += f"  {v:>12.4f}" if v is not None and not math.isnan(v) else f"  {'OOM/skip':>12}"
-        print(row)
+    print("\n".join(rows))
     print("=" * len(header))
-
-    # Summary: sinked vs oja advantage at each context length
-    print("\nSinked vs OjaKV delta (sinked − oja, positive = sinked wins):")
-    for ctx in context_lens:
-        s = results["sinked"].get(ctx)
-        o = results["oja"].get(ctx)
-        if s is not None and o is not None and not math.isnan(s) and not math.isnan(o):
-            delta = s - o
-            print(f"  ctx={ctx:>8,}  delta={delta:+.4f}  {'✓ sinked wins' if delta > 0 else '✗ oja wins'}")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model", default="TinyLlama/TinyLlama-1.1B-Chat-v1.0")
-    parser.add_argument("--ctx-lens", nargs="+", type=int,
-                        default=[256, 512, 1024, 2048])
-    parser.add_argument("--trials", type=int, default=5)
-    parser.add_argument("--sink-len", type=int, default=64)
-    parser.add_argument("--window-len", type=int, default=64)
-    parser.add_argument("--warmup-len", type=int, default=256)
-    parser.add_argument("--depth", type=float, default=0.5,
-                        help="Needle depth as fraction of context (0=start, 1=end)")
-    parser.add_argument("--device", default="cpu")
-    args = parser.parse_args()
-
-    dtype = torch.bfloat16
-    results = run_needle_sweep(
-        model_name=args.model,
-        context_lens=args.ctx_lens,
-        n_trials=args.trials,
-        sink_len=args.sink_len,
-        window_len=args.window_len,
-        warmup_len=args.warmup_len,
-        needle_depth=args.depth,
-        device=args.device,
-        dtype=dtype,
-    )
-    print_results(results, args.ctx_lens)
+    p = argparse.ArgumentParser()
+    p.add_argument("--model", default="mistralai/Mistral-7B-v0.1")
+    p.add_argument("--ctx-lens", nargs="+", type=int, default=[2048, 4096])
+    p.add_argument("--depths", nargs="+", type=float, default=[0.1, 0.3, 0.5, 0.7, 0.9])
+    p.add_argument("--trials", type=int, default=3, help="needle words per depth")
+    p.add_argument("--methods", nargs="+", default=["tkv_sink", "oja_sink", "streaming_llm"])
+    p.add_argument("--ranks", nargs="+", type=int, default=[16, 64])
+    p.add_argument("--oja-ranks", nargs="+", type=int, default=[64])
+    p.add_argument("--warmup-len", type=int, default=512)
+    p.add_argument("--sink-len", type=int, default=64)
+    p.add_argument("--window-len", type=int, default=256)
+    p.add_argument("--pre-rope", action="store_true")
+    p.add_argument("--retain-frac", type=float, default=0.0)
+    p.add_argument("--retain-by", default="residual", choices=["residual", "random"])
+    p.add_argument("--center", action="store_true", help="tkv_sink: mean-center bases (warmup mean)")
+    p.add_argument("--diag", action="store_true", help="report needle-token retention per config")
+    p.add_argument("--device", default="cpu", choices=["cpu", "mps", "cuda"])
+    run(p.parse_args())

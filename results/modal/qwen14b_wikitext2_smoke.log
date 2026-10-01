@@ -1,0 +1,63 @@
+
+Loading Qwen/Qwen2.5-14B on cuda (bfloat16)...
+Loading wikitext2...
+  corpus tokens: 299,078  layers=48  head_dim=128
+  ctx=4096 stride=1024 warmup=512 sink=64 window=256 max_windows=2 pre_rope=True
+      exact                      -  ppl=2.101  ppl_post=1.863  mem=1.000  (0.95s/window)
+   tkv_sink                   r=16  ppl=2.604  ppl_post=2.366  mem=0.207  (8.23s/window)
+   tkv_sink                   r=32  ppl=2.306  ppl_post=2.068  mem=0.336  (8.15s/window)
+   tkv_sink                   r=64  ppl=2.194  ppl_post=1.955  mem=0.594  (8.16s/window)
+   tkv_sink    pyr[96, 64, 48, 32]  ppl=2.228  ppl_post=1.989  mem=0.562  (8.17s/window)
+  streaming_llm                   r=16  ppl=2.213  ppl_post=1.975  mem=0.207  (2.46s/window)
+  streaming_llm                   r=32  ppl=2.104  ppl_post=1.867  mem=0.336  (2.46s/window)
+  streaming_llm                   r=64  ppl=2.100  ppl_post=1.863  mem=0.594  (2.46s/window)
+  streaming_llm    pyr[96, 64, 48, 32]  ppl=2.116  ppl_post=1.878  mem=0.562  (2.47s/window)
+
+===================================================================
+Perplexity (lower = better); mem = KV bytes / exact
+===================================================================
+   method                  ranks  PPL(all)  PPL(post)    mem  s/win
+-------------------------------------------------------------------
+    exact                      -     2.101      1.863  1.000   0.95
+ tkv_sink                   r=16     2.604      2.366  0.207   8.23
+ tkv_sink                   r=32     2.306      2.068  0.336   8.15
+ tkv_sink                   r=64     2.194      1.955  0.594   8.16
+ tkv_sink    pyr[96, 64, 48, 32]     2.228      1.989  0.562   8.17
+streaming_llm                   r=16     2.213      1.975  0.207   2.46
+streaming_llm                   r=32     2.104      1.867  0.336   2.46
+streaming_llm                   r=64     2.100      1.863  0.594   2.46
+streaming_llm    pyr[96, 64, 48, 32]     2.116      1.878  0.562   2.47
+===================================================================
+tokens scored: all=5,119  post-freeze=4,607  windows=2
+
+
+Loading Qwen/Qwen2.5-14B on cuda (bfloat16)...
+Loading wikitext2...
+  corpus tokens: 299,078  layers=48  head_dim=128
+  ctx=4096 stride=1024 warmup=512 sink=64 window=256 max_windows=2 pre_rope=True
+   oja_sink                   r=64  ppl=2.190  ppl_post=1.952  mem=0.594  (90.83s/window)
+
+===================================================================
+Perplexity (lower = better); mem = KV bytes / exact
+===================================================================
+   method                  ranks  PPL(all)  PPL(post)    mem  s/win
+-------------------------------------------------------------------
+ oja_sink                   r=64     2.190      1.952  0.594  90.83
+===================================================================
+tokens scored: all=5,119  post-freeze=4,607  windows=2
+
+
+Loading Qwen/Qwen2.5-14B on cuda (bfloat16)...
+Loading wikitext2...
+  corpus tokens: 299,078  layers=48  head_dim=128
+  ctx=4096 stride=1024 warmup=512 sink=64 window=256 max_windows=2 pre_rope=False
+   tkv_sink                   r=64  ppl=2.237  ppl_post=1.997  mem=0.594  (8.27s/window)
+
+===================================================================
+Perplexity (lower = better); mem = KV bytes / exact
+===================================================================
+   method                  ranks  PPL(all)  PPL(post)    mem  s/win
+-------------------------------------------------------------------
+ tkv_sink                   r=64     2.237      1.997  0.594   8.27
+===================================================================
+tokens scored: all=5,119  post-freeze=4,607  windows=2

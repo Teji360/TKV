@@ -1,0 +1,33 @@
+# secrets
+.env
+
+# python
+__pycache__/
+*.pyc
+
+# latex build artifacts (results/*.log are data and ARE tracked)
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.fdb_latexmk
+paper/*.fls
+paper/*.log
+paper/*.out
+paper/*.nav
+paper/*.snm
+paper/*.toc
+paper/poster/*.aux
+paper/poster/*.fdb_latexmk
+paper/poster/*.fls
+paper/poster/*.log
+paper/poster/*.nav
+paper/poster/*.out
+paper/poster/*.snm
+paper/poster/*.toc
+
+# agent worktrees / local tooling
+.claude/
+.DS_Store
+
+# modal CLI chatter (contains workspace URLs); real data lives in results/modal/*.log
+results/modal_*_console.log

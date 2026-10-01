@@ -1,0 +1,8 @@
+Loading weights:   0%|          | 0/291 [00:00<?, ?it/s]Loading weights: 100%|██████████| 291/291 [00:00<00:00, 5328.60it/s]
+Using the latest cached version of the dataset since Salesforce/wikitext couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'wikitext-2-raw-v1' at ~/.cache/huggingface/datasets/Salesforce___wikitext/wikitext-2-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3 (last modified on Sat Jun 13 10:21:24 2026).
+
+mistralai/Mistral-7B-v0.1  ctx=4096 rank=8  n=16,896 (layer x kv-head x needle token)
+mean percentile = 0.617   above 0.5: 0.662   above 0.9: 0.167
+pgfplots coordinates (bin center, fraction):
+(0.025,0.0033) (0.075,0.0121) (0.125,0.0188) (0.175,0.0264) (0.225,0.0349) (0.275,0.0426) (0.325,0.0431) (0.375,0.0463) (0.425,0.0539) (0.475,0.0563) (0.525,0.0562) (0.575,0.0582) (0.625,0.0613) (0.675,0.0624) (0.725,0.0641) (0.775,0.0643) (0.825,0.0631) (0.875,0.0654) (0.925,0.0743) (0.975,0.0928)

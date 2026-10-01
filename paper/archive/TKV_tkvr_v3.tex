@@ -1,0 +1,535 @@
+\documentclass{article}
+\usepackage[final]{colm2026_conference}
+
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{lineno}
+\usepackage{enumitem}
+\usepackage{multirow}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+
+\newtheorem{proposition}{Proposition}
+\newcommand{\R}{\mathbb{R}}
+
+\title{\textbf{Keep What the Basis Cannot Explain:\\
+Residual-Guided Retention for Online Low-Rank KV Caches}}
+
+\author{
+  David Aror \\
+  Independent Research \\
+  \texttt{tejirid.aror@gmail.com}
+}
+
+\date{}
+
+\begin{document}
+
+\ifcolmsubmission
+\linenumbers
+\fi
+
+\maketitle
+
+\begin{abstract}
+Online low-rank KV-cache compression keeps every token but projects it onto a
+small basis; eviction keeps a few tokens exactly and discards the rest. Under a
+matched-memory evaluation on Mistral-7B and Qwen2.5-14B we find that neither is
+satisfying: eviction (StreamingLLM) wins on perplexity but cannot recall
+anything it has evicted, while a frozen low-rank cache (TKV) recalls some
+evicted content but costs 5--6\% perplexity. The failure has a simple cause:
+a variance-maximizing basis discards exactly the rare directions that make a
+token worth recalling. We propose \emph{residual-guided retention} (TKV-R):
+compute each evicted token's projection residual $\lVert k - \hat k\rVert$,
+which is free because it is produced by the projection itself, and keep the
+highest-residual tokens exactly in a fixed-size heap. Because RoPE is a
+rotation, this rule minimizes a worst-case attention-logit error bound that
+holds for \emph{every future query}. At 0.59$\times$ KV memory on Mistral-7B,
+TKV-R cuts low-rank's perplexity cost from $+5.6\%$ to $+1.8$--$2.5\%$ and
+reaches 0.73--0.93 needle-retrieval accuracy (eviction: 0.60); selecting the
+same number of tokens at random reaches only 0.20. The benefit is predicted by
+a measurable quantity --- how far needle tokens rank in the residual
+distribution --- which is high for TinyLlama and Mistral and low for
+Qwen2.5-14B, where TKV-R matches eviction's perplexity ($+1.3\%$ vs.\
+$+1.0\%$) but does not improve retrieval. We also correct a prior claim about
+truncated Brand updates, replacing a false global optimality guarantee with a
+valid online error certificate, and show that a frozen basis must be fit
+before RoPE.
+\end{abstract}
+
+%% ============================================================
+\section{Introduction}
+\label{sec:intro}
+
+The key-value (KV) cache grows linearly with context and dominates inference
+memory at long context. Online methods that need no calibration fall into two
+families. \emph{Eviction} keeps a subset of tokens exactly, e.g.\ attention
+sinks plus a recent window (StreamingLLM, \citealp{streamingllm2023}) or
+attention-selected tokens \citep{h2o2023,snapkv2024}. \emph{Low-rank
+compression} keeps every token but stores it as $R \ll d$ coefficients on a
+basis maintained online \citep{ojakov2025}.
+
+We began with a low-rank design, TKV, that fits the basis during a warmup
+window and then freezes it, so each later token costs a single
+$\mathcal{O}(Rd)$ projection. A fair evaluation --- same exact sinks and
+window for every method, pre-RoPE bases, a corrected adaptive baseline, and
+eviction given the same bytes --- gave a mixed picture
+(Section~\ref{sec:baselines}): eviction is clearly better for next-token
+prediction, but low-rank caches can retrieve facts that eviction has thrown
+away. Looking at \emph{which} facts they lose suggested a fix. A basis fit by
+SVD keeps the directions shared by many tokens; a token that carries new
+information is, almost by definition, one the basis explains poorly. Its
+projection residual is large, and it is computed anyway.
+
+\textbf{Contributions.}
+\begin{itemize}[leftmargin=*,itemsep=1pt]
+  \item \textbf{Residual-guided retention (TKV-R).} Evicted tokens with the
+        largest projection residual are kept exactly in a fixed-capacity heap;
+        the rest are stored as low-rank coefficients. The rule is free to
+        compute, streaming-compatible, and minimizes a query-agnostic
+        worst-case logit-error bound (Section~\ref{sec:method}).
+  \item \textbf{Matched-memory results at 7B and 14B scale.} On Mistral-7B
+        TKV-R nearly removes low-rank's perplexity penalty while exceeding
+        eviction's retrieval accuracy; random selection of the same number of
+        tokens fails, isolating the residual criterion as the cause
+        (Section~\ref{sec:results}).
+  \item \textbf{A predictor of when it works.} The residual percentile of
+        needle tokens tracks the retrieval gain across TinyLlama-1.1B,
+        Mistral-7B and Qwen2.5-14B, explaining the negative result on Qwen
+        (Section~\ref{sec:diag}).
+  \item \textbf{Corrections.} Truncated Brand updates are optimal only for the
+        retained state plus the new token, not for the full history; we give a
+        valid online error certificate instead (Section~\ref{sec:theory}). A
+        frozen basis must be fit to pre-RoPE keys, and a common streaming
+        pitfall can make Oja-rule baselines look far worse than they are
+        (Section~\ref{sec:baselines}).
+\end{itemize}
+
+%% ============================================================
+\section{Background and Setup}
+\label{sec:setup}
+
+\paragraph{Cache layout.}
+For each layer and KV head, query $i$ attends \emph{exactly} to $S$ sink tokens
+and to a window of the $W$ most recent tokens; every other earlier (``middle'')
+token is either evicted, compressed, or --- in TKV-R --- retained exactly. We
+use $S{=}64$ throughout.
+
+\paragraph{TKV: a frozen low-rank basis.}
+During a warmup of $T_0{=}512$ tokens the cache is exact. At $t = T_0$ TKV fits
+rank-$R$ bases $B_K, B_V \in \R^{R\times d}$ (orthonormal rows) to the warmup
+keys and values and freezes them; every later token is stored as its
+coefficients $B_K\mathbf{k}$, $B_V\mathbf{v}$, and attention is computed from the
+factors at $\mathcal{O}(R(T{+}d))$ cost. The warmup basis can be built online,
+e.g.\ with a Halko randomized range finder \citep{halko2011} on an initial
+prefix followed by Brand rank-1 updates \citep{brand2006} up to $T_0$; in our
+experiments we use the exact SVD of the warmup window, which minimizes warmup
+reconstruction error and is therefore the best case for such a streaming
+warmup (Section~\ref{sec:theory}).
+
+\paragraph{Pre-RoPE bases.}
+Keys are rotated by rotary position embeddings \citep{rope2021} before
+attention. We fit $B_K$ to \emph{pre}-RoPE keys, store pre-RoPE coefficients,
+and apply RoPE to the reconstructed key at its own position, as in Palu
+\citep{palu2024} and ShadowKV \citep{shadowkv2024}.
+
+\paragraph{Baselines.}
+\emph{StreamingLLM at matched memory}: a rank-$R$ cache over $T$ tokens stores
+$TR + Rd$ extra entries per tensor, so eviction receives $W' = W + TR/d + R$
+window tokens. \emph{OjaKV (corrected)}: the same warmup basis as TKV, then a
+normalized Oja step \citep{oja1982}
+$B \leftarrow \mathrm{QR}\bigl(B + \eta_t (B\mathbf{x})\mathbf{x}^\top\bigr)$,
+$\eta_t = 1/\bigl((t{+}1)\lVert\mathbf{x}\rVert^2\bigr)$, every 16 tokens, with
+stored coefficients rotated into each new basis.
+
+\paragraph{Memory accounting.}
+The memory ratio is $\bigl(TR + Rd + (S{+}W{+}M)\,d\bigr)/(Td)$ per head, where
+$M$ is the number of retained exact tokens; retained tokens are charged in full
+on top of their coefficients. At $T{=}4096$, $d{=}128$, the rank-64 TKV
+configuration and every TKV-R configuration we compare use 0.594$\times$ the
+full cache.
+
+%% ============================================================
+\section{Residual-Guided Retention}
+\label{sec:method}
+
+For a middle token with pre-RoPE key $\mathbf{k}_j$ define its residual
+$\rho_j = \lVert \mathbf{k}_j - B_K^\top B_K \mathbf{k}_j \rVert$. It is
+obtained from the coefficients $\mathbf{c}_j = B_K\mathbf{k}_j$ the cache
+computes anyway, as $\rho_j^2 = \lVert\mathbf{k}_j\rVert^2 - \lVert\mathbf{c}_j\rVert^2$.
+
+\paragraph{Rule.} Given a budget of $M$ exact middle tokens, keep exactly the
+$M$ tokens with the largest $\rho_j$ among those that have left the window;
+store all others as coefficients. Streaming, this is a min-heap of capacity
+$M$ keyed by $\rho$: when a token leaves the window it is compared with the
+heap minimum, and the loser keeps only its coefficients ($\mathcal{O}(Rd +
+\log M)$ per token). With a fixed capacity the heap always contains the top-$M$
+residuals seen so far. The total budget is split between rank $R$, window $W$
+and $M$.
+
+\paragraph{Why residuals.}
+Let $\hat{\mathbf{k}}_j$ be the reconstructed key and $\mathcal{R}_j$ the
+(orthogonal) RoPE rotation at position $j$. For any query $\mathbf{q}$,
+\begin{equation}
+\bigl|\mathbf{q}^\top\mathcal{R}_j\mathbf{k}_j - \mathbf{q}^\top\mathcal{R}_j\hat{\mathbf{k}}_j\bigr|
+\le \lVert\mathbf{q}\rVert\,\lVert\mathcal{R}_j(\mathbf{k}_j - \hat{\mathbf{k}}_j)\rVert
+= \lVert\mathbf{q}\rVert\,\rho_j .
+\label{eq:logit}
+\end{equation}
+
+\begin{proposition}[Query-agnostic certificate]
+\label{prop:cert}
+Let $\mathcal{C}_i$ be the compressed tokens seen by query $i$ and
+$\varepsilon_i = \alpha\lVert\mathbf{q}_i\rVert\max_{j\in\mathcal{C}_i}\rho_j$,
+with attention scale $\alpha$. Then the attention weights $\hat p$ computed
+from the cache satisfy $\lVert p - \hat p\rVert_1 \le e^{2\varepsilon_i} - 1$
+relative to weights $p$ from exact keys, and the attention output satisfies
+$\lVert o - \hat o\rVert \le (e^{2\varepsilon_i}-1)\max_j\lVert\mathbf{v}_j\rVert
++ \max_{j\in\mathcal{C}_i}\lVert\mathbf{v}_j - \hat{\mathbf{v}}_j\rVert$. Among
+all ways to choose $M$ exact middle tokens, keeping the $M$ largest residuals
+minimizes $\max_{j\in\mathcal{C}_i}\rho_j$, and hence $\varepsilon_i$, for every
+query simultaneously.
+\end{proposition}
+
+\emph{Proof sketch.} By \eqref{eq:logit} every scaled logit moves by at most
+$\varepsilon_i$ (exact tokens by zero). If all logits move by at most
+$\varepsilon$, every softmax weight changes by a factor in
+$[e^{-2\varepsilon}, e^{2\varepsilon}]$, so
+$\lVert p-\hat p\rVert_1 \le e^{2\varepsilon}-1$. The output bound follows from
+the triangle inequality, and the optimality of the top-$M$ rule is immediate
+because the bound depends on the retained set only through the largest
+remaining residual. \hfill$\square$
+
+The bound is loose, and its value is the ranking it induces rather than its
+magnitude. Unlike attention-score eviction, which ranks tokens by how past
+queries used them, the rule depends only on the tokens and so protects future
+queries equally. Tokens whose content lies outside the dominant subspace are
+exactly those a low-rank cache would otherwise corrupt most.
+
+%% ============================================================
+\section{Correcting the Streaming-Warmup Guarantee}
+\label{sec:theory}
+
+An earlier version of TKV claimed that each truncated Brand update keeps the
+Eckart--Young--Mirsky (EYM) optimal rank-$R$ approximation of the entire token
+history. That claim is false. After a rank-$R$ truncation the discarded
+directions are gone, so the next update factors
+$A_t = \begin{bmatrix}\hat K_{t-1}\\ \mathbf{k}_t^\top\end{bmatrix}$ rather than
+$K_t = \begin{bmatrix}K_{t-1}\\ \mathbf{k}_t^\top\end{bmatrix}$; the two agree only
+when the previous representation was lossless.
+
+\begin{proposition}[What truncated Brand updates do guarantee]
+\label{prop:brand}
+Let $\hat K_t$ be the best rank-$R$ approximation of $A_t$ (what a Brand update
+followed by truncation computes) and $E_t = K_t - \hat K_t$. Then (i) $\hat K_t$
+is EYM-optimal for $A_t$, the previous truncated state augmented with the new
+token; and (ii)
+$\lVert E_t\rVert_F \le \lVert E_{t-1}\rVert_F + \sigma_{R+1}(A_t)$, so
+$\lVert E_t\rVert_F \le \lVert E_{t_c}\rVert_F + \sum_{s=t_c+1}^{t}\sigma_{R+1}(A_s)$
+for a cold start at $t_c$.
+\end{proposition}
+
+\emph{Proof.} (i) is Brand's construction plus EYM applied to $A_t$. For (ii),
+$E_t = \begin{bmatrix}E_{t-1}\\ \mathbf{0}^\top\end{bmatrix} + (A_t - \hat K_t)$, and
+since $\mathrm{rank}(A_t) \le R{+}1$ exactly one singular value is discarded,
+so $\lVert A_t - \hat K_t\rVert_F = \sigma_{R+1}(A_t)$; apply the triangle
+inequality. \hfill$\square$
+
+The right-hand side is available online, since $\sigma_{R+1}(A_t)$ is produced
+by each update, so a streaming warmup can report a running certificate of its
+own error. The corollaries of the earlier version (per-token global
+optimality, and that Brand updates ``preserve'' the cold-start error bound
+exactly) do not hold and are withdrawn; an exact SVD of the warmup window, as
+used in our experiments, is optimal for that window.
+
+%% ============================================================
+\section{Experiments}
+\label{sec:results}
+
+\paragraph{Protocol.}
+Mistral-7B-v0.1 \citep{mistral2023} (32 layers, 8 KV heads, $d{=}128$) and
+Qwen2.5-14B \citep{qwen25} (48 layers, 8 KV heads, $d{=}128$), bfloat16,
+context 4096. Perplexity: HuggingFace strided evaluation (stride 1024) on
+WikiText-2 test \citep{merity2017}, 30 windows (33.8K scored tokens), reported
+on post-warmup tokens; every method scores the same tokens. Retrieval: a
+one-sentence needle (``The special code word is \emph{blue}.'') inserted into
+WikiText-2 text at depths 0.1--0.9, 3 needle words per depth, answered at the
+end \citep{niah2023}; we report top-1 accuracy over the 15 prompts. We also
+ran TinyLlama-1.1B ($d{=}64$, context 2048, 10 windows). Compression is
+simulated in one teacher-forced pass with custom attention; with $R{=}d$, or a
+window covering the sequence, or all tokens retained, it reproduces exact
+logits, and it matches token-by-token streaming (max abs.\ error
+$7\times10^{-7}$). The simulated retention set for query $i$ is the top
+$\lfloor f\,n_i\rfloor$ residuals of its $n_i$ middle tokens; this is a subset
+of what the fixed-capacity heap keeps and equals it for the final query, so
+retrieval numbers are exact for the streaming rule and perplexity numbers are
+conservative.
+
+\begin{table}[t]
+\centering
+\caption{Matched memory (0.594$\times$ full cache), context 4096. WikiText-2
+perplexity on post-warmup tokens (increase over exact) and needle top-1
+accuracy. TKV-R rows keep the stated fraction $f$ of middle tokens exact.
+Exact: Mistral 4.595, Qwen 3.977, accuracy 1.00.}
+\label{tab:main}
+\small
+\begin{tabular}{lccccc}
+\toprule
+& & \multicolumn{2}{c}{Mistral-7B} & \multicolumn{2}{c}{Qwen2.5-14B} \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-6}
+Method & $R$ / $W$ / $f$ & PPL & Needle & PPL & Needle \\
+\midrule
+StreamingLLM          & -- / 2368 / --    & \textbf{4.640} (+1.0\%) & 0.60 & \textbf{4.018} (+1.0\%) & \textbf{0.60} \\
+TKV                   & 64 / 256 / --     & 4.853 (+5.6\%) & 0.87 & 4.189 (+5.3\%) & 0.20 \\
+OjaKV (corrected)     & 64 / 256 / --     & 4.835 (+5.2\%) & \textbf{0.93} & 4.180 (+5.1\%) & -- \\
+TKV, larger window    & 16 / 1840 / --    & 4.682 (+1.9\%) & 0.40 & 4.046 (+1.7\%) & 0.33 \\
+\midrule
+TKV + random retention & 16 / 768 / 0.33  & 4.764 (+3.7\%) & 0.20 & 4.090 (+2.8\%) & 0.20 \\
+\textbf{TKV-R}        & 16 / 768 / 0.33   & 4.680 (+1.8\%) & 0.73 & 4.029 (+1.3\%) & 0.20 \\
+\textbf{TKV-R}        & 32 / 512 / 0.23   & 4.710 (+2.5\%) & \textbf{0.93} & 4.051 (+1.9\%) & 0.20 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Main result}
+
+Table~\ref{tab:main} compares all methods at the same memory. On Mistral-7B,
+TKV-R at rank 32 matches the best retrieval of any compressed method (0.93,
+tied with OjaKV) at less than half the perplexity cost of plain TKV or OjaKV
+($+2.5\%$ vs.\ $+5.6\%$ / $+5.2\%$), and exceeds eviction's retrieval (0.60) for
+1.5 points of perplexity. The comparison with ``TKV, larger window'' isolates
+retention: at the same memory and essentially the same perplexity (4.680 vs.\
+4.682), spending the budget on high-residual tokens instead of a longer window
+raises retrieval from 0.40 to 0.73. Choosing the same number of tokens at
+random is worse on both axes (4.764, 0.20), so the gain comes from
+\emph{which} tokens are kept. The same ordering holds on TinyLlama-1.1B
+(Table~\ref{tab:tiny}), where TKV-R reaches 0.87--1.00 retrieval against 0.60
+for eviction and 0.47 for plain TKV. On Qwen2.5-14B, TKV-R brings perplexity
+close to eviction ($+1.3\%$ vs.\ $+1.0\%$) and beats random retention, but no
+compressed configuration improves retrieval; Section~\ref{sec:diag} explains
+why.
+
+\begin{table}[t]
+\centering
+\caption{TinyLlama-1.1B, context 2048, matched memory 0.672$\times$,
+WikiText-2 (10 windows). Exact: 8.350, accuracy 1.00.}
+\label{tab:tiny}
+\small
+\begin{tabular}{lccc}
+\toprule
+Method & $R$ / $W$ / $f$ & PPL & Needle \\
+\midrule
+StreamingLLM & -- / 1312 / -- & \textbf{8.470} (+1.4\%) & 0.60 \\
+TKV & 32 / 256 / -- & 8.614 (+3.2\%) & 0.47 \\
+TKV + random retention & 8 / 768 / 0.23 & 8.850 (+6.0\%) & 0.53 \\
+\textbf{TKV-R} & 8 / 768 / 0.23 & 8.750 (+4.8\%) & 0.87 \\
+TKV + random retention & 8 / 512 / 0.36 & 9.254 (+10.8\%) & 0.33 \\
+\textbf{TKV-R} & 8 / 512 / 0.36 & 8.826 (+5.7\%) & \textbf{1.00} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{When does residual retention help?}
+\label{sec:diag}
+
+\begin{table}[t]
+\centering
+\caption{Does the rule keep the needle? Fraction of needle-sentence tokens held
+exact for the final query (averaged over layers, heads and prompts) under
+random vs.\ residual retention, and the needle tokens' mean percentile in the
+residual distribution (0.5 = indistinguishable). Configs: TinyLlama
+8/768/0.23; Mistral and Qwen 16/768/0.33.}
+\label{tab:diag}
+\small
+\begin{tabular}{lcccc}
+\toprule
+& \multicolumn{2}{c}{Needle tokens kept} & Residual & Needle accuracy \\
+Model & random & residual & percentile & random $\to$ residual \\
+\midrule
+TinyLlama-1.1B & 0.144 & 0.244 (1.7$\times$) & 0.657 & 0.53 $\to$ 0.87 \\
+Mistral-7B     & 0.262 & 0.381 (1.5$\times$) & 0.640 & 0.20 $\to$ 0.73 \\
+Qwen2.5-14B    & 0.260 & 0.291 (1.1$\times$) & 0.563 & 0.20 $\to$ 0.20 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The rule can only help if the tokens a later query needs actually stand out in
+residual. Table~\ref{tab:diag} measures this directly. On TinyLlama and
+Mistral, needle tokens sit at the 64th--66th residual percentile and are kept
+1.5--1.7$\times$ more often than chance, and retrieval improves sharply. On
+Qwen2.5-14B they sit at the 56th percentile, barely above chance, and
+retrieval does not move. We tested one explanation --- that Qwen's key-projection
+bias occupies the basis --- by fitting the basis to mean-centered keys and
+values: Qwen's needle retention was unchanged (0.291) and its accuracy moved
+only from 0.20 to 0.27, while centering hurt Mistral (accuracy 0.60, perplexity
+4.753). Residual separability is thus a model property that can be measured
+cheaply on a calibration prompt before deploying the rule.
+
+\subsection{Prerequisites and baselines}
+\label{sec:baselines}
+
+\begin{table}[t]
+\centering
+\caption{Top: TKV at rank 64 with a basis fit to post- vs.\ pre-RoPE keys
+(WikiText-2 perplexity increase). Bottom: TKV vs.\ StreamingLLM (SLLM)
+perplexity increase (\%) across memory budgets (ranks 16/32/64).}
+\label{tab:prereq}
+\small
+\begin{tabular}{lcc}
+\toprule
+& post-RoPE & pre-RoPE \\
+\midrule
+Mistral-7B  & +11.5\% & \textbf{+5.6\%} \\
+Qwen2.5-14B & +10.1\% & \textbf{+5.3\%} \\
+\bottomrule
+\end{tabular}\\[0.8em]
+\begin{tabular}{lccc}
+\toprule
+Memory & 0.21$\times$ & 0.34$\times$ & 0.59$\times$ \\
+\midrule
+Mistral TKV / SLLM & +19.8 / +9.5 & +12.5 / +4.7 & +5.6 / +1.0 \\
+Qwen TKV / SLLM & +23.0 / +7.4 & +13.7 / +3.5 & +5.3 / +1.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Pre-RoPE bases.} A basis frozen on post-RoPE keys cannot span keys
+rotated to later positions; fitting it pre-RoPE halves the perplexity cost on
+both models (Table~\ref{tab:prereq}, top), and on TinyLlama the post-RoPE
+variant is catastrophic (perplexity 76.3 vs.\ 6.94 pre-RoPE at rank 48).
+
+\paragraph{A corrected OjaKV matches TKV.} A natural streaming Oja
+implementation --- including our own first one --- stores each token's
+coefficients at arrival but reconstructs with the \emph{final} basis, and uses
+an unnormalized step that makes the basis snap to each new token. The mismatch
+produced relative reconstruction errors above 1.0 on real keys (worse than
+storing zeros) and perplexities in the hundreds. We do not know whether the
+original OjaKV code \citep{ojakov2025} shares this issue; with a normalized step,
+coefficient rotation and the same warmup, our OjaKV is within 0.5\% of TKV on
+WikiText-2 and on a benchmark that switches from prose to code after the
+warmup (Mistral $+4.2\%$ vs.\ $+4.6\%$; Qwen $+4.9\%$ vs.\ $+5.5\%$), where
+StreamingLLM costs $+0.2\%$.
+
+\paragraph{Low-rank vs.\ eviction on perplexity.} Without retention, eviction
+beats a low-rank cache at every budget, and the gap widens as memory shrinks
+(Table~\ref{tab:prereq}, bottom); the ordering also holds on PG-19
+\citep{rae2020} at rank 64 (Mistral $+2.5\%$ vs.\ $+0.7\%$, Qwen $+2.3\%$ vs.\
+$+0.9\%$). A PyramidKV-style \citep{pyramidkv2024} per-layer rank schedule was
+worse than uniform rank at equal memory. This is the gap TKV-R closes on
+Mistral.
+
+\subsection{Decode cost}
+\label{sec:latency}
+
+\begin{table}[t]
+\centering
+\caption{Per-token decode step for one layer (8 KV $\times$ 4 query heads,
+$d{=}128$, fp16) on an NVIDIA L40S, ms.}
+\label{tab:latency}
+\small
+\begin{tabular}{rrccc}
+\toprule
+Tokens & $R$ & Full cache & TKV (frozen) & OjaKV \\
+\midrule
+32,768  & 32 & 2.83 & \textbf{0.36} & 1.31 \\
+131,072 & 32 & 12.35 & \textbf{2.14} & 3.33 \\
+131,072 & 64 & 12.37 & \textbf{5.75} & 8.88 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A frozen basis avoids OjaKV's per-token basis update and $\mathcal{O}(TR^2)$
+coefficient rotation: the decode step is 5.8--7.9$\times$ faster than the full
+cache at rank 32 and 2.1--2.2$\times$ at rank 64 for 32K--128K tokens, and
+1.5--3.7$\times$ faster than OjaKV (Table~\ref{tab:latency}). TKV-R adds a
+residual computation that reuses the projection and a heap operation per
+evicted token; we did not time it end to end. A matched-memory eviction cache
+reads a comparable number of entries, so these gains are relative to the full
+cache and to OjaKV, not to eviction.
+
+%% ============================================================
+\section{Related Work}
+\label{sec:related}
+
+\textbf{Low-rank KV caches.} Palu \citep{palu2024}, LoRC \citep{lorc2024},
+xKV \citep{xkv2025} and SVDq \citep{svdq2025} factorize projections or caches
+offline; ShadowKV \citep{shadowkv2024} keeps a low-rank pre-RoPE key cache;
+STAR-KV \citep{starkv2026} learns per-head and per-block ranks by soft
+thresholding; PuzzleKV \citep{puzzlekv2026} factorizes fixed-length pages
+independently. OjaKV \citep{ojakov2025} tracks the basis online with Oja's rule
+and keeps first and recent tokens exact. These methods choose \emph{ranks} or
+\emph{bases}; TKV-R instead chooses, per token, whether low rank suffices.
+\textbf{Residual-based compression.} AnchorKV \citep{anchorkv2026} stores a
+few anchors exactly, expresses other tokens through their nearest anchor and
+refines the tokens whose approximation most affects the output; DeltaKV
+\citep{deltakv2026} encodes residuals against retrieved reference tokens. TKV-R
+shares the idea of spending exact storage where an approximation is worst, but
+uses a single online low-rank basis, the free projection residual as the
+criterion, a fixed-capacity streaming heap, and a query-agnostic logit-error
+certificate. \textbf{Eviction.} StreamingLLM \citep{streamingllm2023}, H2O
+\citep{h2o2023}, Scissorhands \citep{scissorhands2023}, SnapKV
+\citep{snapkv2024} and PyramidKV \citep{pyramidkv2024} rank tokens by recency or
+attention; the residual criterion is complementary and could be combined with
+attention scores.
+
+%% ============================================================
+\section{Limitations}
+\label{sec:limitations}
+
+Contexts are 2K--4K tokens (Mistral-7B-v0.1 uses a 4096-token sliding window),
+far from the 128K regime that motivates KV compression; only the latency
+microbenchmark reaches 128K. Perplexity uses 30 windows (10 for TinyLlama) and
+retrieval 15 prompts per cell, without confidence intervals, and retrieval is a
+single synthetic needle format rather than a benchmark such as RULER or
+LongBench. The benefit of TKV-R is model-dependent and absent on
+Qwen2.5-14B. The warmup basis is an exact SVD (the best case for a streaming
+warmup), the heap is simulated in a teacher-forced pass, and memory is
+accounted analytically rather than measured. We compare against one eviction
+policy and no quantization or attention-guided eviction baseline.
+
+%% ============================================================
+\section{Conclusion}
+
+A low-rank KV cache fails precisely on the tokens its basis cannot explain,
+and those are often the tokens worth remembering. Keeping them exactly --- at
+no extra compute, with a guarantee that holds for any future query --- turns a
+frozen low-rank cache from strictly worse than eviction into a better
+perplexity--retrieval tradeoff on Mistral-7B and TinyLlama, and a simple
+residual-percentile diagnostic predicts when it will not help, as on
+Qwen2.5-14B. We also withdraw an incorrect optimality claim for truncated
+Brand updates and replace it with a valid online certificate.
+
+%% ============================================================
+\small
+\bibliography{colm2026_conference}
+\bibliographystyle{colm2026_conference}
+
+\appendix
+\section{Additional Numbers}
+\label{app:numbers}
+
+\textbf{More TKV-R configurations (0.594$\times$, WikiText-2 / needle).}
+Mistral-7B, $R{=}16$, $W{=}256$, $f{=}0.42$: 4.727 ($+2.9\%$) / 0.73. Qwen2.5-14B,
+same: 4.052 ($+1.9\%$) / 0.33. Mean-centered bases (16/768/0.33): Mistral 4.753
+/ 0.60, Qwen 4.027 / 0.27. TinyLlama, $R{=}16$, $W{=}256$, $f{=}0.31$: residual
+8.780 / 0.73, random 9.164 / 0.33; $R{=}8$, $W{=}256$, $f{=}0.46$: residual
+8.866 / 1.00, random 9.232 / 0.73.
+
+\textbf{Rank vs.\ window without retention (0.594$\times$).} $R$ = 0 / 16 / 32
+/ 48 / 64 with $W$ = 2368 / 1840 / 1312 / 784 / 256: Mistral perplexity 4.640 /
+4.682 / 4.712 / 4.763 / 4.853 and needle accuracy 0.60 / 0.40 / 0.53 / 0.60 /
+0.87; Qwen 4.018 / 4.046 / 4.080 / 4.117 / 4.189 and 0.60 / 0.33 / 0.33 / 0.27 /
+0.20.
+
+\textbf{Needle probability by depth (Mistral-7B, 4K, 0.594$\times$).} Mean
+$P(\text{needle})$ at depths 0.1/0.3/0.5/0.7/0.9: exact 0.69/0.76/0.76/0.75/0.83;
+StreamingLLM 0.00/0.00/0.77/0.77/0.84; TKV (64) 0.60/0.39/0.41/0.28/0.27; TKV-R
+(16/768/0.33) 0.00/0.30/0.33/0.54/0.78; random retention
+0.05/0.06/0.05/0.01/0.79.
+
+\end{document}

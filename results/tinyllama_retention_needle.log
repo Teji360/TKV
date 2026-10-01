@@ -1,0 +1,92 @@
+
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 on mps...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 6014.52it/s]
+Using the latest cached version of the dataset since Salesforce/wikitext couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'wikitext-2-raw-v1' at ~/.cache/huggingface/datasets/Salesforce___wikitext/wikitext-2-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3 (last modified on Sat Jun 13 10:21:24 2026).
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (341468 > 2048). Running this sequence through the model will result in indexing errors
+  ctx=[2048] depths=[0.1, 0.3, 0.5, 0.7, 0.9] words=['blue', 'gold', 'dark'] warmup=512 sink=64 window=256 pre_rope=True
+  NIAH   2048                exact      -  1.000       0.927       0.901       0.909       0.910       0.879   0.905  1.00
+  NIAH   2048             tkv_sink   r=32  0.672       0.417       0.211       0.003       0.010       0.884   0.305  0.47
+  NIAH   2048        streaming_llm   r=32  0.672       0.000       0.000       0.930       0.903       0.921   0.551  0.60
+
+============================================================================================================
+Needle-in-a-Haystack: mean P(needle) per depth (higher = better); acc = top-1 accuracy
+============================================================================================================
+   ctx        method  ranks    mem       d=0.1       d=0.3       d=0.5       d=0.7       d=0.9  mean P   acc
+------------------------------------------------------------------------------------------------------------
+  2048                exact      -  1.000       0.927       0.901       0.909       0.910       0.879   0.905  1.00
+  2048             tkv_sink   r=32  0.672       0.417       0.211       0.003       0.010       0.884   0.305  0.47
+  2048        streaming_llm   r=32  0.672       0.000       0.000       0.930       0.903       0.921   0.551  0.60
+============================================================================================================
+
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 on mps...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 6300.77it/s]
+Using the latest cached version of the dataset since Salesforce/wikitext couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'wikitext-2-raw-v1' at ~/.cache/huggingface/datasets/Salesforce___wikitext/wikitext-2-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3 (last modified on Sat Jun 13 10:21:24 2026).
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (341468 > 2048). Running this sequence through the model will result in indexing errors
+  ctx=[2048] depths=[0.1, 0.3, 0.5, 0.7, 0.9] words=['blue', 'gold', 'dark'] warmup=512 sink=64 window=256 pre_rope=True
+  NIAH   2048                exact      -  1.000       0.927       0.901       0.909       0.910       0.879   0.905  1.00
+  NIAH   2048   tkv_sink+res0.3056   r=16  0.672       0.325       0.509       0.525       0.537       0.879   0.555  0.73
+
+============================================================================================================
+Needle-in-a-Haystack: mean P(needle) per depth (higher = better); acc = top-1 accuracy
+============================================================================================================
+   ctx        method  ranks    mem       d=0.1       d=0.3       d=0.5       d=0.7       d=0.9  mean P   acc
+------------------------------------------------------------------------------------------------------------
+  2048                exact      -  1.000       0.927       0.901       0.909       0.910       0.879   0.905  1.00
+  2048   tkv_sink+res0.3056   r=16  0.672       0.325       0.509       0.525       0.537       0.879   0.555  0.73
+============================================================================================================
+
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 on mps...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 6217.68it/s]
+Using the latest cached version of the dataset since Salesforce/wikitext couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'wikitext-2-raw-v1' at ~/.cache/huggingface/datasets/Salesforce___wikitext/wikitext-2-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3 (last modified on Sat Jun 13 10:21:24 2026).
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (341468 > 2048). Running this sequence through the model will result in indexing errors
+  ctx=[2048] depths=[0.1, 0.3, 0.5, 0.7, 0.9] words=['blue', 'gold', 'dark'] warmup=512 sink=64 window=256 pre_rope=True
+  NIAH   2048                exact      -  1.000       0.927       0.901       0.909       0.910       0.879   0.905  1.00
+  NIAH   2048   tkv_sink+res0.4583    r=8  0.672       0.658       0.699       0.815       0.691       0.876   0.748  1.00
+
+============================================================================================================
+Needle-in-a-Haystack: mean P(needle) per depth (higher = better); acc = top-1 accuracy
+============================================================================================================
+   ctx        method  ranks    mem       d=0.1       d=0.3       d=0.5       d=0.7       d=0.9  mean P   acc
+------------------------------------------------------------------------------------------------------------
+  2048                exact      -  1.000       0.927       0.901       0.909       0.910       0.879   0.905  1.00
+  2048   tkv_sink+res0.4583    r=8  0.672       0.658       0.699       0.815       0.691       0.876   0.748  1.00
+============================================================================================================
+
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 on mps...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 6120.18it/s]
+Using the latest cached version of the dataset since Salesforce/wikitext couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'wikitext-2-raw-v1' at ~/.cache/huggingface/datasets/Salesforce___wikitext/wikitext-2-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3 (last modified on Sat Jun 13 10:21:24 2026).
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (341468 > 2048). Running this sequence through the model will result in indexing errors
+  ctx=[2048] depths=[0.1, 0.3, 0.5, 0.7, 0.9] words=['blue', 'gold', 'dark'] warmup=512 sink=64 window=256 pre_rope=True
+  NIAH   2048                exact      -  1.000       0.927       0.901       0.909       0.910       0.879   0.905  1.00
+  NIAH   2048   tkv_sink+ran0.3056   r=16  0.672       0.523       0.000       0.001       0.143       0.878   0.309  0.33
+
+============================================================================================================
+Needle-in-a-Haystack: mean P(needle) per depth (higher = better); acc = top-1 accuracy
+============================================================================================================
+   ctx        method  ranks    mem       d=0.1       d=0.3       d=0.5       d=0.7       d=0.9  mean P   acc
+------------------------------------------------------------------------------------------------------------
+  2048                exact      -  1.000       0.927       0.901       0.909       0.910       0.879   0.905  1.00
+  2048   tkv_sink+ran0.3056   r=16  0.672       0.523       0.000       0.001       0.143       0.878   0.309  0.33
+============================================================================================================
+
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 on mps...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 5923.24it/s]
+Using the latest cached version of the dataset since Salesforce/wikitext couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'wikitext-2-raw-v1' at ~/.cache/huggingface/datasets/Salesforce___wikitext/wikitext-2-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3 (last modified on Sat Jun 13 10:21:24 2026).
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (341468 > 2048). Running this sequence through the model will result in indexing errors
+  ctx=[2048] depths=[0.1, 0.3, 0.5, 0.7, 0.9] words=['blue', 'gold', 'dark'] warmup=512 sink=64 window=256 pre_rope=True
+  NIAH   2048                exact      -  1.000       0.927       0.901       0.909       0.910       0.879   0.905  1.00
+  NIAH   2048   tkv_sink+ran0.4583    r=8  0.672       0.741       0.000       0.566       0.406       0.887   0.520  0.73
+
+============================================================================================================
+Needle-in-a-Haystack: mean P(needle) per depth (higher = better); acc = top-1 accuracy
+============================================================================================================
+   ctx        method  ranks    mem       d=0.1       d=0.3       d=0.5       d=0.7       d=0.9  mean P   acc
+------------------------------------------------------------------------------------------------------------
+  2048                exact      -  1.000       0.927       0.901       0.909       0.910       0.879   0.905  1.00
+  2048   tkv_sink+ran0.4583    r=8  0.672       0.741       0.000       0.566       0.406       0.887   0.520  0.73
+============================================================================================================

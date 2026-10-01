@@ -2,11 +2,17 @@
 OjaKV baseline: online low-rank KV cache compression via Oja's rule.
 
 After every token, the right singular basis V is updated via one step of
-the generalized Oja rule (gradient ascent on explained variance) followed
-by QR re-orthonormalization.  Key/value vectors are stored as their
-projections onto the *current* basis at the time of insertion; the basis
-then rotates as new tokens arrive, so old projections become stale — the
-primary source of approximation error vs BrandOnly's exact Brand update.
+the normalized Oja rule (eta_t = 1/((t+1)*||x||^2), gradient ascent on
+explained variance) followed by QR re-orthonormalization.
+
+Streaming semantics: coefficients are always expressed in the *current*
+basis.  When the basis moves V_old -> V_new, the stored coefficients are
+rotated K_proj <- K_proj @ (V_old @ V_new.T) (the Oja analogue of Brand's
+U-rotation, O(T R^2)); the new token is then stored as V_new @ x.  So each
+reconstructed token is its projection onto the chain of bases seen since it
+arrived — realizable online, no access to past raw K/V.  The error vs
+BrandOnly comes from the subspace lagging the exact SVD (information
+discarded by earlier projections), not from a frame mismatch.
 
 Interface mirrors kv_state.py so benchmark.py can call both identically.
 """
@@ -14,6 +20,8 @@ Interface mirrors kv_state.py so benchmark.py can call both identically.
 import jax
 import jax.numpy as jnp
 from typing import NamedTuple, Tuple
+
+from kv_state import tkv_cold_start
 
 
 class OjaKVState(NamedTuple):
@@ -39,6 +47,27 @@ def init_oja_kv(T_max: int, R_max: int, d: int, seed: int = 0) -> OjaKVState:
     )
 
 
+def init_oja_kv_from_warmup(
+    K_warm: jnp.ndarray, V_warm: jnp.ndarray, R_max: int, T_max: int,
+) -> OjaKVState:
+    """
+    Initialize OjaKV from an SVD of the warmup window — the same basis and
+    coefficients TKV's tkv_cold_start produces — so OjaKV and TKV start the
+    decode phase from an identical state.  Rank is min(R_max, w, d).
+    Subsequent append_token_oja calls continue the step schedule at t = w.
+    """
+    w = K_warm.shape[0]
+    tkv = tkv_cold_start(K_warm, V_warm, R_max, warmup_len=w)
+    R = tkv.rank
+    return OjaKVState(
+        V_k=tkv.basis_k,
+        V_v=tkv.basis_v,
+        K_proj=jnp.zeros((T_max, R), dtype=jnp.float32).at[:w].set(tkv.proj_k),
+        V_proj=jnp.zeros((T_max, R), dtype=jnp.float32).at[:w].set(tkv.proj_v),
+        seq_len=jnp.array(w, dtype=jnp.int32),
+    )
+
+
 def _oja_step(
     V: jnp.ndarray,        # (R_max, d) current orthonormal basis
     buf: jnp.ndarray,      # (T_max, R_max) projection buffer
@@ -47,24 +76,24 @@ def _oja_step(
     t: int,                # step count (for 1/(t+1) step size)
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
-    One Oja gradient step + QR orthonormalization, then store the compressed
-    projection of x at position seq_len in buf.
+    One normalized Oja step + QR orthonormalization, rotate the stored
+    coefficients into the new basis, then store x's projection onto the new
+    basis at position seq_len in buf.
 
-    Step size eta = 1/(t+1) gives the diminishing schedule with convergence
-    guarantees matching Oja (1982).  The h stored in buf is computed BEFORE
-    the basis update so it reflects the basis that was active at insertion —
-    matching how OjaKV stores projections during streaming decoding.
+    eta = 1/((t+1)*||x||^2): the 1/(t+1) schedule of Oja (1982) made
+    scale-invariant, so large-norm keys (||k|| ~ 20-60) do not snap the
+    basis onto the latest token.
     """
-    h = V @ x                               # (R_max,) — project onto current basis
-    buf = jax.lax.dynamic_update_slice(buf, h[None, :], (seq_len, 0))
-
-    eta = 1.0 / (t + 1)
+    h = V @ x                               # (R_max,)
+    eta = 1.0 / ((t + 1) * (x @ x + 1e-9))
     V_new = V + eta * jnp.outer(h, x)      # (R_max, d) gradient ascent step
     # Re-orthonormalize rows via economy QR on the transpose
     Q, R = jnp.linalg.qr(V_new.T)          # Q: (d, R_max), R: (R_max, R_max)
     signs = jnp.sign(jnp.diag(R))          # canonical sign (positive diagonal)
     V_orth = (Q * signs).T                 # (R_max, d)
 
+    buf = buf @ (V @ V_orth.T)             # rotate old coefficients into new basis
+    buf = jax.lax.dynamic_update_slice(buf, (V_orth @ x)[None, :], (seq_len, 0))
     return V_orth, buf
 
 
@@ -88,10 +117,8 @@ def reconstruct_kv_oja(
     state: OjaKVState, T_max: int
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
-    Reconstruct K and V using current basis.  Because the basis rotated
-    after each insertion, old projections are computed in a different basis,
-    so K_proj[i] @ V_k != k_i in general — this mismatch is the error OjaKV
-    accumulates over long sequences.
+    Reconstruct K and V using the current basis (coefficients are kept in
+    the current basis by _oja_step's rotation, so frames always match).
     """
     mask = (jnp.arange(T_max) < state.seq_len)[:, None]   # (T_max, 1)
     K = state.K_proj @ state.V_k                           # (T_max, d)

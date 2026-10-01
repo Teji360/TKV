@@ -1,0 +1,12 @@
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 7064.41it/s]
+Using the latest cached version of the dataset since Salesforce/wikitext couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'wikitext-2-raw-v1' at ~/.cache/huggingface/datasets/Salesforce___wikitext/wikitext-2-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3 (last modified on Sat Jun 13 10:21:24 2026).
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (286177 > 1024). Running this sequence through the model will result in indexing errors
+Extracting real K/V from model...
+
+TKV Streaming vs OjaKV — warmup=256, decode=256 tokens
+rank     BrandOnly           TKV         OjaKV  tkv_err  oja_err
+----------------------------------------------------------------
+   8       2.132ms       0.202ms       2.117ms  0.4437      0.3886
+  16       2.054ms       0.161ms       2.367ms  0.3714      0.2863
+  32       2.210ms       0.209ms       1.761ms  0.2709      0.1933

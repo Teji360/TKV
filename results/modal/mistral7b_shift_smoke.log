@@ -1,0 +1,39 @@
+
+Loading mistralai/Mistral-7B-v0.1 on cuda (bfloat16)...
+Loading shift...
+  corpus tokens: 8,192  layers=32  head_dim=128
+  ctx=4096 stride=4096 warmup=512 sink=64 window=256 max_windows=2 pre_rope=True
+      exact                      -  ppl=2.627  ppl_post=2.332  mem=1.000  (0.82s/window)
+   tkv_sink                   r=16  ppl=2.887  ppl_post=2.598  mem=0.207  (4.41s/window)
+   tkv_sink                   r=64  ppl=2.703  ppl_post=2.409  mem=0.594  (4.23s/window)
+  streaming_llm                   r=16  ppl=2.712  ppl_post=2.418  mem=0.207  (1.57s/window)
+  streaming_llm                   r=64  ppl=2.626  ppl_post=2.331  mem=0.594  (1.58s/window)
+
+===================================================================
+Perplexity (lower = better); mem = KV bytes / exact
+===================================================================
+   method                  ranks  PPL(all)  PPL(post)    mem  s/win
+-------------------------------------------------------------------
+    exact                      -     2.627      2.332  1.000   0.82
+ tkv_sink                   r=16     2.887      2.598  0.207   4.41
+ tkv_sink                   r=64     2.703      2.409  0.594   4.23
+streaming_llm                   r=16     2.712      2.418  0.207   1.57
+streaming_llm                   r=64     2.626      2.331  0.594   1.58
+===================================================================
+tokens scored: all=8,190  post-freeze=7,166  windows=2
+
+
+Loading mistralai/Mistral-7B-v0.1 on cuda (bfloat16)...
+Loading shift...
+  corpus tokens: 8,192  layers=32  head_dim=128
+  ctx=4096 stride=4096 warmup=512 sink=64 window=256 max_windows=2 pre_rope=True
+   oja_sink                   r=64  ppl=2.696  ppl_post=2.403  mem=0.594  (41.44s/window)
+
+===================================================================
+Perplexity (lower = better); mem = KV bytes / exact
+===================================================================
+   method                  ranks  PPL(all)  PPL(post)    mem  s/win
+-------------------------------------------------------------------
+ oja_sink                   r=64     2.696      2.403  0.594  41.44
+===================================================================
+tokens scored: all=8,190  post-freeze=7,166  windows=2

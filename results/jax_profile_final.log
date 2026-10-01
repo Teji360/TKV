@@ -1,0 +1,27 @@
+device: NVIDIA L40S  dtype=float32  layer = 8 KV heads x 4 groups, d=128, rank=32
+     ctx  batch   full ms  evict ms  tkv_r ms  tkv tok/s  KV ratio
+------------------------------------------------------------------
+    4096      1     0.491     0.452     0.250     4002.3     0.594
+    4096      8     0.882     0.750     0.678    11800.3     0.594
+    4096     32     2.121     1.434     1.600    20004.8     0.594
+   32768      1     0.893     0.769     0.679     1473.1     0.594
+   32768      8     3.674     2.451     4.212     1899.1     0.594
+   32768     32    13.351     8.002    10.263     3117.9     0.594
+  131072      1     2.062     1.438     2.287      437.3     0.594
+  131072      8    13.221     7.957    16.115      496.4     0.594
+
+[stderr]
+W0930 17:29:05.712483       4 bfc_allocator.cc:311] Allocator (GPU_0_bfc) ran out of memory trying to allocate 16.02GiB with freed_by_count=0. The caller indicates that this is not a failure, but this may mean that there could be performance gains if more memory were available.
+Traceback (most recent call last):
+  File "/root/src/profile_jax.py", line 117, in <module>
+    t_full = _timeit(bench_full(B, n_kv, g, T, d, dt), a.iters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/src/profile_jax.py", line 29, in _timeit
+    jax.block_until_ready(fn())
+                          ^^^^
+  File "/root/src/profile_jax.py", line 54, in run
+    state[0], state[1], out = _full_step(state[0], state[1], k_new, k_new, q,
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+jax.errors.JaxRuntimeError: RESOURCE_EXHAUSTED: Out of memory while trying to allocate 16.02GiB.
+--------------------
+For simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.

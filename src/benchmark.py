@@ -9,6 +9,7 @@ Run: python benchmark.py
 Outputs: benchmark_reconstruction.pdf, benchmark_memory.pdf, benchmark_perplexity.pdf
 """
 
+import os
 import time
 
 import jax
@@ -27,7 +28,7 @@ from kv_state import (
     SinkedKVState, sinked_cold_start,
 )
 from attention import tkv_compressed_attention, sinked_attention
-from oja_kv import init_oja_kv, append_token_oja, reconstruct_kv_oja
+from oja_kv import init_oja_kv, init_oja_kv_from_warmup, append_token_oja, reconstruct_kv_oja
 from model_hooks import load_gpt2, extract_real_kv_generic
 
 
@@ -966,10 +967,11 @@ def benchmark_tkv_reconstruction(
             K_tkv, _ = tkv_reconstruct(state_tkv)
             tkv_err[(seq_len, rank)] = float(jnp.linalg.norm(K_true - K_tkv)) / ref
 
-            # OjaKV (streaming, same rank)
+            # OjaKV (streaming, same rank, same SVD warmup window as TKV)
             T_max = seq_len + 1
-            state_o = init_oja_kv(T_max, rank, d)
-            for i in range(seq_len):
+            w = min(seq_len, warmup_len)
+            state_o = init_oja_kv_from_warmup(K_true[:w], V_true[:w], rank, T_max)
+            for i in range(w, seq_len):
                 state_o = append_token_oja(state_o, K_true[i], V_true[i], rank)
             K_oj, _ = reconstruct_kv_oja(state_o, T_max)
             oja_err[(seq_len, rank)] = float(jnp.linalg.norm(K_true - K_oj[:seq_len])) / ref
@@ -1206,7 +1208,8 @@ def benchmark_tkv_streaming_vs_oja(
     """
     Measures decode-phase per-token update time after a shared warmup.
 
-    Warmup: first warmup_len tokens processed by Brand (BrandOnly) or OjaKV.
+    Warmup: first warmup_len tokens processed by Brand (BrandOnly/TKV); OjaKV
+    is initialized from an SVD of the same warmup window.
     Decode: next decode_len tokens — only this phase is timed.
 
     TKV uses init_tkv_streaming to pre-allocate the proj buffer,
@@ -1257,10 +1260,8 @@ def benchmark_tkv_streaming_vs_oja(
             / (jnp.linalg.norm(K_all) + 1e-9)
         )
 
-        # --- OjaKV (decode phase only) ---
-        state_o = init_oja_kv(T_max, rank, d)
-        for i in range(warmup_len):
-            state_o = append_token_oja(state_o, K_warm[i], V_warm[i], rank)
+        # --- OjaKV (decode phase only; SVD init on the same warmup window) ---
+        state_o = init_oja_kv_from_warmup(K_warm, V_warm, rank, T_max)
         t0 = time.perf_counter()
         for i in range(decode_len):
             state_o = append_token_oja(state_o, K_decode[i], V_decode[i], rank)
@@ -1518,14 +1519,17 @@ if __name__ == "__main__":
     print_tkv_reconstruction_table(tkv_err_long, oja_err_long, LONG_SEQ_LENS_ERR, ranks=(4, 8, 16))
     plot_tkv_reconstruction(tkv_err_long, oja_err_long, LONG_SEQ_LENS_ERR, ranks=(4, 8, 16))
 
-    print()
-    print("=" * 50)
-    print("Metric 9: TKV Perplexity (Mistral-7B)")
-    print("=" * 50)
-    ppl_tkv_results = benchmark_tkv_perplexity(
-        model, tokenizer, pyramid_ranks=PYRAMID_RANKS_32L, halko_rank=32,
-        max_length=128, head_dim=D_REAL, T_max=T_MAX, device=DEVICE,
-    )
+    # SKIP_METRIC9=1 skips Metric 9 (uses the legacy model_hooks OjaKV hook) and the summary plot that needs it
+    SKIP_METRIC9 = os.environ.get("SKIP_METRIC9") == "1"
+    if not SKIP_METRIC9:
+        print()
+        print("=" * 50)
+        print("Metric 9: TKV Perplexity (Mistral-7B)")
+        print("=" * 50)
+        ppl_tkv_results = benchmark_tkv_perplexity(
+            model, tokenizer, pyramid_ranks=PYRAMID_RANKS_32L, halko_rank=32,
+            max_length=128, head_dim=D_REAL, T_max=T_MAX, device=DEVICE,
+        )
 
     print()
     print("=" * 50)
@@ -1550,11 +1554,12 @@ if __name__ == "__main__":
     )
     plot_tkv_streaming_vs_oja(streaming_results, ranks=STREAMING_RANKS)
 
-    print()
-    print("=" * 50)
-    print("Summary: TKV vs OjaKV Head-to-Head")
-    print("=" * 50)
-    plot_head_to_head(ppl_tkv_results, streaming_results, tkv_err_long, oja_err_long)
+    if not SKIP_METRIC9:
+        print()
+        print("=" * 50)
+        print("Summary: TKV vs OjaKV Head-to-Head")
+        print("=" * 50)
+        plot_head_to_head(ppl_tkv_results, streaming_results, tkv_err_long, oja_err_long)
 
     print()
     print("All benchmarks complete.")

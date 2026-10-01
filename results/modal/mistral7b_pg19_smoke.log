@@ -1,0 +1,19 @@
+
+Loading mistralai/Mistral-7B-v0.1 on cuda (bfloat16)...
+Loading pg19...
+  corpus tokens: 63,739  layers=32  head_dim=128
+  ctx=4096 stride=1024 warmup=512 sink=64 window=256 max_windows=2 pre_rope=True
+      exact                      -  ppl=5.585  ppl_post=5.601  mem=1.000  (0.84s/window)
+   tkv_sink                   r=64  ppl=5.706  ppl_post=5.737  mem=0.594  (4.48s/window)
+  streaming_llm                   r=64  ppl=5.594  ppl_post=5.612  mem=0.594  (1.56s/window)
+
+===================================================================
+Perplexity (lower = better); mem = KV bytes / exact
+===================================================================
+   method                  ranks  PPL(all)  PPL(post)    mem  s/win
+-------------------------------------------------------------------
+    exact                      -     5.585      5.601  1.000   0.84
+ tkv_sink                   r=64     5.706      5.737  0.594   4.48
+streaming_llm                   r=64     5.594      5.612  0.594   1.56
+===================================================================
+tokens scored: all=5,119  post-freeze=4,607  windows=2

@@ -1,0 +1,771 @@
+\documentclass{article}
+\usepackage[final]{colm2026_conference}
+
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\graphicspath{{../results/}}
+\usepackage{hyperref}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{lineno}
+\usepackage{enumitem}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}{Proposition}
+\newtheorem{corollary}{Corollary}
+\newtheorem{remark}{Remark}
+\newcommand{\R}{\mathbb{R}}
+\let\PhiSymbol\Phi
+\renewcommand{\Phi}{\boldsymbol{\PhiSymbol}}
+\newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
+
+\title{\textbf{TKV: Online KV Cache Compression via Warmup-Then-Freeze\\
+Brand Updates and a Random Sketch Bridge}}
+
+\author{
+  David Aror \\
+  Independent Research \\
+  \texttt{tejirid.aror@gmail.com}
+}
+
+\date{}
+
+\begin{document}
+
+\ifcolmsubmission
+\linenumbers
+\fi
+
+\maketitle
+
+\begin{abstract}
+The key-value (KV) cache is the dominant memory bottleneck in long-context
+autoregressive inference. Existing online compression methods face a
+tradeoff: Oja's rule (used by OjaKV) is cheap but gives no per-token
+optimality guarantee and drifts at long context, while Brand's exact
+rank-1 SVD update is provably optimal but costs $\mathcal{O}(R^3 + TR^2)$
+per token --- growing with context length. We propose \textbf{TKV} (Tensor
+KV), which resolves this by running Brand's update only through a bounded
+warmup window, then freezing the resulting basis and projecting subsequent
+tokens onto it at $\mathcal{O}(R{\cdot}d)$ per token indefinitely. A
+$\Phi$-bridge reuses the Gaussian matrix already used for token-importance
+tracking as the Halko randomized range finder for cold-start
+initialization, and the update is implemented with XLA-static shapes for
+GPU/TPU compatibility. On real Mistral-7B activations, a TKV rank pyramid
+(avg.\ rank 15) reaches perplexity 20.1 versus an exact-cache baseline of
+19.4 (3.6\% degradation), while the same pyramid schedule applied to
+OjaKV degrades to 60$\times$ worse than exact; at 128K-token context TKV
+achieves 8.5$\times$ memory compression and lower reconstruction error
+than OjaKV at every long-context length tested (1K--32K tokens).
+Importance-weighted cold start further reduces important-token
+reconstruction error by 90--95\% at rank 8--16.
+\end{abstract}
+
+%% ============================================================
+\section{Introduction}
+\label{sec:intro}
+
+The key-value (KV) cache is the dominant memory bottleneck in autoregressive
+transformer inference: for $L$ layers, $H$ KV heads, head dimension $d$,
+and context length $T$, the dense cache requires $\mathcal{O}(2LHdT)$
+floats, becoming the binding constraint on batch size, GPU utilization,
+and serving cost as context scales to 128K+ tokens.
+
+The predominant approach is low-rank compression: represent the key matrix
+$K \in \R^{T \times d}$ as a rank-$R$ factorization $U \Sigma V^\top$ with
+$R \ll \min(T, d)$, reducing memory from $\mathcal{O}(Td)$ to
+$\mathcal{O}(R(T+d))$.  The key challenge is \emph{when} to compute this
+factorization.  Offline methods (SVDq \citep{svdq2025}, xKV \citep{xkv2025},
+KVTC \citep{kvtc2026}) run a batch SVD after the full sequence is
+available, incompatible with streaming generation; online methods must
+update the factorization incrementally after each new token.  OjaKV
+\citep{ojakov2025}, the current online state of the art, applies Oja's
+rule (stochastic gradient PCA) token-by-token --- asymptotically
+convergent but with no per-step optimality guarantee.  When OjaKV's
+authors considered Brand's exact rank-1 update as an alternative, they
+rejected it as ``too slow'' without a systematic evaluation.
+
+\textbf{This work.}  We revisit that judgment for a bounded warmup window,
+then \emph{freeze} the resulting basis for the remainder of the sequence
+rather than running Brand's exact update ($\mathcal{O}(R^3+TR^2)$ per
+token) forever, which would otherwise let its cost compound at long
+context (Section~\ref{sec:experiments}).  During warmup itself, exact
+updates are cheap and substantially more accurate than Oja's rule
+(Section~\ref{sec:experiments}); the freeze transition preserves this
+advantage while holding per-token cost at $\mathcal{O}(R{\cdot}d)$
+indefinitely.  We also identify a structural insight missed by prior
+work: the random Gaussian matrix used for token-importance scoring
+satisfies exactly the distributional requirements of Halko's randomized
+SVD range finder, so reusing it (\emph{the $\Phi$-bridge}) unifies two
+previously separate operations and eliminates a distinct SVD warm-up cost.
+
+\textbf{Contributions.}
+\begin{itemize}
+  \item The $\Phi$-bridge: a theoretical and practical connection between
+        random linear sketching and Halko's randomized SVD (Section~\ref{sec:phi}).
+  \item To our knowledge, the first online KV compression method with a
+        per-token EYM optimality guarantee through a warmup window, followed
+        by a freeze transition that holds per-token cost at
+        $\mathcal{O}(R{\cdot}d)$ indefinitely
+        (Sections~\ref{sec:brand}--\ref{sec:freeze}).
+  \item An XLA-compilable implementation of Brand's dynamic rank-1 update using
+        static tensor shapes (Section~\ref{sec:xla}).
+  \item Importance-weighted cold start that reduces important-token reconstruction
+        error by 90--95\% at rank 8--16 (Section~\ref{sec:importance}).
+  \item Empirical evaluation against OjaKV under identical constraints, showing
+        consistent quality improvement at the cost of moderate per-token overhead
+        (Section~\ref{sec:experiments}).
+\end{itemize}
+
+%% ============================================================
+\section{Method}
+\label{sec:method}
+
+\subsection{Preliminaries}
+\label{sec:background}
+
+\paragraph{KV cache structure and EYM.}
+In a transformer with head dimension $d$, after processing $t$ tokens the KV
+cache for one head is a matrix $K \in \R^{t \times d}$ (and similarly $V$);
+each new token appends one row, and compression approximates
+$K \approx \hat{K} = U_K \Sigma_K V_K^\top$ with $R \leq \min(t, d)$.  By the
+Eckart-Young-Mirsky (EYM) theorem \citep{eckart1936,mirsky1960}, the best rank-$R$ approximation of any
+matrix $A$ in Frobenius or spectral norm is its truncated SVD
+$\hat{A}_R = U_R \Sigma_R V_R^\top$, so any online method that maintains a
+valid truncated SVD after each update is EYM-optimal for that update.
+
+\paragraph{Brand's rank-1 update \citep{brand2006} and Halko randomized SVD \citep{halko2011}.}
+Given a factorization $A = U \Sigma V^\top$ and a new row $\mathbf{x}$,
+Brand's update computes the exact SVD of $\tilde{A} = [A; \mathbf{x}]$ in
+closed form by factoring a small $(R+1) \times (R+1)$ augmented matrix and
+truncating back to rank $R$ (an exact EYM step per token), then updating
+$U$ via an $\mathcal{O}(TR^2)$ rotation (Section~\ref{sec:brand} gives the
+full algorithm).  Halko's randomized SVD instead sketches $A \in
+\R^{m \times n}$ with a random $\Omega \in \R^{n \times R}$: the range of
+$A\Omega$ approximates $A$'s column space, and QR on $A\Omega$ followed by
+the compact SVD of $Q^\top A$ gives the randomized SVD at
+$\mathcal{O}(mnR)$ cost vs.\ $\mathcal{O}(mn^2)$ for exact SVD, with
+high-probability error bounds \citep{halko2011}.
+
+\paragraph{Oja's rule \citep{oja1982}.}
+For streaming PCA, Oja's rule updates the $R \times d$ basis $V$ after each
+observation $\mathbf{x}$ as $V \leftarrow V + \eta_t (V\mathbf{x})\mathbf{x}^\top$,
+$V \leftarrow \mathrm{QR}(V^\top)^\top$, with step size $\eta_t = 1/(t+1)$
+--- the update used by OjaKV.  Unlike Brand's update, this is a stochastic
+gradient step: each intermediate $V$ is an approximation, not an exact
+truncated SVD.
+
+\subsection{The \texorpdfstring{$\Phi$}{Phi}-Bridge}
+\label{sec:phi}
+
+A random Gaussian sketch tracks token importance via a random projection
+matrix $\Phi \in \R^{R \times d}$: for a token vector $\mathbf{x} \in \R^d$,
+$\Phi \mathbf{x} \in \R^R$ captures token statistics in compressed form.
+Halko's randomized range finder requires exactly the same object --- a
+random matrix $\Omega \in \R^{d \times R}$ whose product $K\Omega$ forms a
+randomized range basis for the row space of $K$.
+
+\textbf{Observation.}  Setting $\Omega = \Phi^\top$ reuses the same
+Gaussian matrix for both roles: $K\Phi^\top \in \R^{T \times R}$
+approximates the principal right singular vectors of $K$ while $\Phi$
+simultaneously encodes token importance statistics.  This unification ---
+the \emph{$\Phi$-bridge} --- works because the Gaussian distribution of
+$\Phi$ satisfies the requirements for both linear importance sketching
+(Johnson-Lindenstrauss concentration \citep{johnson1984}) and Halko's range finder
+(sub-Gaussian rows, Theorem~1.1 of \citep{halko2011}); this differs from
+the structured hashing of the classical count-min sketch
+\citep{cormode2005}, which shares only the general idea of random linear
+projection for dimensionality reduction.
+
+\subsection{Cold Start via Halko Initialization}
+\label{sec:coldstart}
+
+After observing a prefix of $T_0$ tokens, TKV initializes the SVD factorization
+via the randomized range finder:
+
+\begin{algorithm}[H]
+\caption{Halko Cold Start with $\Phi$-Bridge}
+\begin{algorithmic}[1]
+\Require $K \in \R^{T_0 \times d}$, $V \in \R^{T_0 \times d}$, $\Phi \in \R^{R \times d}$
+\State $Y \leftarrow K \Phi^\top$  \hfill \textit{randomized sketch, $\mathcal{O}(T_0 d R)$}
+\State $Q, \_ \leftarrow \mathrm{QR}(Y)$  \hfill \textit{approximate range basis}
+\State $B \leftarrow Q^\top K$  \hfill \textit{project into low-dimensional space}
+\State $\hat{U}, \hat{\Sigma}, \hat{V}^\top \leftarrow \mathrm{SVD}(B)$  \hfill \textit{small SVD, $\mathcal{O}(R^2 d)$}
+\State $U_K \leftarrow Q \hat{U}$, $\Sigma_K \leftarrow \hat{\Sigma}$, $V_K \leftarrow \hat{V}$
+\State \Return $(U_K, \Sigma_K, V_K)$
+\end{algorithmic}
+\end{algorithm}
+
+If importance weights $w_i \geq 0$ are available (e.g., from prior attention
+statistics), we apply them as row weights: $Y \leftarrow \mathrm{diag}(w)K\Phi^\top$,
+biasing the range finder toward the subspace of high-importance tokens.
+This cold start opens TKV's \emph{warmup phase}: it is followed by exact
+Brand updates (Section~\ref{sec:brand}) for the first $T_0$ (``warmup\_len'')
+tokens, after which the basis is frozen (Section~\ref{sec:freeze}).
+
+\subsection{Streaming Brand Updates (Warmup Phase)}
+\label{sec:brand}
+
+During warmup, each new token $(\mathbf{k}, \mathbf{v})$ triggers one Brand
+rank-1 update:
+
+\begin{algorithm}[H]
+\caption{Brand Rank-1 Update (per token)}
+\begin{algorithmic}[1]
+\Require $(U_K, \Sigma_K, V_K)$, new key $\mathbf{k} \in \R^d$, rank budget $R$
+\State $\mathbf{c} \leftarrow V_K \mathbf{k}$  \hfill \textit{project onto current row space}
+\State $\mathbf{p} \leftarrow \mathbf{k} - V_K^\top \mathbf{c}$,
+       $\hat{\mathbf{p}} \leftarrow \mathbf{p}/\|\mathbf{p}\|$
+\State Form $K_{\mathrm{aug}} \in \R^{(R+1)\times(R+1)}$ with diagonal $\boldsymbol{\sigma}$, row extension $\mathbf{c}$, and corner $\|\mathbf{p}\|$
+\State $\hat{U}, \hat{\Sigma}, \hat{W}^\top \leftarrow \mathrm{SVD}(K_{\mathrm{aug}})$
+\State $\boldsymbol{\sigma} \leftarrow \hat{\Sigma}_{:R}$  \hfill \textit{truncate to rank $R$ (EYM step)}
+\State Extend $V_K$ with $\hat{\mathbf{p}}$, rotate: $V_K \leftarrow \hat{W}_{:R} [V_K; \hat{\mathbf{p}}^\top]$
+\State Append new $U_K$ row, rotate: $U_K \leftarrow [U_K; \mathbf{0}^\top] \hat{U}_{:R,:R}$
+\State \Return $(U_K, \boldsymbol{\sigma}, V_K)$
+\end{algorithmic}
+\end{algorithm}
+
+The truncation at step~5 is exactly an EYM projection (formalized as
+Corollary~\ref{cor:eym}), holding after every token during the warmup phase
+($t \leq T_0$); Section~\ref{sec:freeze} describes the post-warmup regime.
+
+\subsection{Freeze Transition (Decode Phase)}
+\label{sec:freeze}
+
+Once $t = T_0$, TKV freezes the basis $(V_K, V_V)$ produced by the most
+recent Brand update and stops running Algorithm~2.  Every subsequent token
+is instead projected onto this fixed basis:
+
+\begin{algorithm}[H]
+\caption{TKV Frozen-Phase Token Update (per token, $t > T_0$)}
+\begin{algorithmic}[1]
+\Require Frozen basis $V_K \in \R^{R \times d}$, stored projections
+         $\mathrm{proj}_K \in \R^{(t-1) \times R}$, new key $\mathbf{k} \in \R^d$
+\State $\mathbf{c} \leftarrow V_K \mathbf{k}$ \hfill \textit{project onto the frozen basis, $\mathcal{O}(Rd)$}
+\State Append $\mathbf{c}$ to $\mathrm{proj}_K$ \hfill \textit{no SVD, no rotation}
+\State \Return $\mathrm{proj}_K$
+\end{algorithmic}
+\end{algorithm}
+
+This is implemented by \texttt{tkv\_add\_token} in our reference
+implementation.  The motivation is cost: Brand's update is
+$\mathcal{O}(R^3 + TR^2)$ per token, so running it indefinitely makes
+per-token cost grow with context length.  Freezing after a bounded warmup
+caps per-token cost at $\mathcal{O}(Rd)$ for the rest of the sequence,
+regardless of how long it runs --- the gap between the two reaches
+$13.4\times$ by $T=16{,}000$ (Section~\ref{sec:experiments}).
+
+The tradeoff (formalized as Proposition~\ref{prop:postfreeze}) is that
+frozen-phase tokens are no longer individually EYM-optimal, since $V_K$ was
+fit to $K_{T_0}$ rather than the full sequence; empirically this is
+favorable regardless, since TKV's fixed-but-accurate basis still
+outperforms OjaKV's continuously-drifting one at every long-context length
+tested (Section~\ref{sec:experiments}).
+
+\subsection{XLA-Static Shape Implementation}
+\label{sec:xla}
+
+Brand's update is inherently dynamic ($U_K$ grows by one row per token), but
+static-shape XLA compilation requires a fixed pre-allocated buffer
+$\hat{U} \in \R^{T_{\max} \times R}$ with the logical sequence length
+tracked separately; new rows are written via
+\texttt{jax.lax.dynamic\_update\_slice}, which supports dynamic-index
+writes while keeping a static shape graph, and the $\mathcal{O}(TR^2)$
+U-rotation operates on this buffer bounded by $T_{\max}$.  To our
+knowledge, no prior work has implemented Brand updates in XLA-compilable
+form, a prerequisite for GPU/TPU deployment.
+
+\subsection{Importance-Weighted Cold Start}
+\label{sec:importance}
+
+During autoregressive generation, attention weight statistics accumulate per
+token position.  We maintain an
+EMA importance score $I_i \leftarrow \alpha I_i + (1-\alpha) \cdot \bar{w}_i$,
+where $\bar{w}_i = \frac{1}{n_q} \sum_{q} \mathrm{softmax}(\mathbf{q} K^\top / \sqrt{d})_{q,i}$
+is the mean attention weight token $i$ receives across queries.  Decayed
+accumulation of attention statistics in this form is also used by the
+concurrent Moment-KV \citep{momentkv2024}, there as a momentum-based
+eviction signal rather than as weights for a low-rank basis.
+When the context must be re-compressed (e.g., at context-length boundaries),
+these scores serve as row weights in the Halko cold start, biasing the initial
+basis toward tokens that are actually attended to.  Section~\ref{sec:experiments}
+shows this reduces important-token reconstruction error by 90--95\% at rank 8--16.
+Attention is computed directly from these SVD factors without
+reconstructing $K$ or $V$, at $\mathcal{O}(R(T{+}d))$ rather than
+$\mathcal{O}(Td)$ cost, identically before and after the freeze
+(Appendix~\ref{app:attn} gives the formula).
+
+%% ============================================================
+\section{Theoretical Analysis}
+\label{sec:theory}
+
+These results follow from applying Brand's exact rank-1 update iteratively
+under the Eckart-Young-Mirsky theorem; the contribution is recognizing that
+this combination maintains EYM-optimality token-by-token in the KV cache
+setting, which Oja's rule does not.
+
+\begin{corollary}[Per-Token EYM Optimality, Warmup Phase]
+\label{cor:eym}
+Let $K_t \in \R^{t \times d}$ be the key matrix after $t \leq T_0$ tokens
+and $(U_t, \boldsymbol{\sigma}_t, V_t)$ the TKV state after the $t$-th Brand
+update (Algorithm~2). Then
+$\| K_t - U_t \mathrm{diag}(\boldsymbol{\sigma}_t) V_t^\top \|_F
+  = \min_{\mathrm{rank}(B) \leq R} \| K_t - B \|_F$,
+since each update truncates the exact SVD of $[K_{t-1}; \mathbf{k}_t^\top]$
+to rank $R$.
+\end{corollary}
+
+\begin{proposition}[Post-Freeze Cost and Quality]
+\label{prop:postfreeze}
+For $t > T_0$, the fixed basis $(V_{T_0,K}, V_{T_0,V})$ processes each token
+in $\mathcal{O}(Rd)$ time (Algorithm~3) with no further EYM updates: the
+projection is exact within the rowspace of $V_{T_0,K}$ but not, in general,
+the EYM-optimal rank-$R$ approximation of $K_t$. Post-freeze quality is
+therefore bounded by how well the warmup-window subspace continues to span
+later tokens, not by a fresh optimality guarantee.
+\end{proposition}
+
+\begin{corollary}[Comparison to OjaKV]
+For $t \leq T_0$, TKV achieves the minimum Frobenius reconstruction error
+among all rank-$R$ factorizations of $K_t$; OjaKV's stochastic-gradient
+state has no analogous guarantee. For $t > T_0$ neither method retains a
+strict guarantee (Proposition~\ref{prop:postfreeze}), but empirically TKV's
+fixed-but-accurate basis still outperforms OjaKV's continuously-drifting one
+at every long-context length tested (Section~\ref{sec:experiments}).
+\end{corollary}
+
+\begin{proposition}[Cold Start Error Bound]
+After the Halko cold start with oversampling parameter $p$,
+$\| K - \hat{K} \|_F \leq
+  \left(1 + \sqrt{R/(p+1)} \cdot t_\delta \right) \sigma_{R+1}(K)$
+with probability at least $1-\delta$, where $\sigma_{R+1}(K)$ is the
+$(R+1)$-th singular value and $t_\delta$ is a tail factor from the Halko
+error bound (Theorem~1.1 in \citep{halko2011}); Brand updates preserve this
+quality exactly through $t = T_0$.
+\end{proposition}
+
+%% ============================================================
+\section{Experiments}
+\label{sec:experiments}
+
+Real-model experiments (reconstruction, BrandOnly-vs-OjaKV head-to-head,
+perplexity, decode latency) use \emph{real} K/V activations captured from
+Mistral-7B-v0.1 \citep{mistral2023} on WikiText-2 \citep{merity2017} via a
+lightweight passthrough hook, with no
+compression applied during extraction; synthetic-data experiments (memory
+formula, long-context reconstruction, importance weighting) use $d=64$
+throughout, independent of the deployment model.  All experiments use
+JAX~0.4 \citep{jax2018} and $T_{\max}=1024$ where applicable; timings are Python/eager
+mode on CPU (GPU numbers would differ due to XLA compilation benefits).
+
+\subsection{Reconstruction Error vs OjaKV: The BrandOnly Ablation}
+\label{sec:brandonly-ablation}
+
+We first establish the quality ceiling achievable by exact Brand updates
+with no freeze (\emph{BrandOnly}) against OjaKV (Oja's rule with
+$\eta_t = 1/(t+1)$) at matched sequence lengths and rank budgets --- this
+is the warmup-phase mechanism TKV inherits, run here to its full extent
+(never frozen) as an ablation.
+
+\begin{table}[t]
+\centering
+\caption{Relative Frobenius reconstruction error on Mistral-7B (layer~16,
+KV head~0).  BrandOnly consistently achieves lower error than OjaKV;
+advantage grows at shorter contexts and higher ranks (per-token update time
+discussed in the Speed paragraph below).}
+\label{tab:recon}
+\small
+\begin{tabular}{rrccc}
+\toprule
+$T$ & $R$ & BrandOnly error & OjaKV error & BrandOnly advantage \\
+\midrule
+ 64 &  4 & 0.4823 & 0.7851 & 1.63$\times$ \\
+ 64 &  8 & 0.4067 & 0.7841 & 1.93$\times$ \\
+ 64 & 16 & 0.3012 & 0.7831 & 2.60$\times$ \\
+ 64 & 32 & 0.1670 & 0.7830 & 4.69$\times$ \\
+\midrule
+128 &  8 & 0.4499 & 0.7877 & 1.75$\times$ \\
+128 & 16 & 0.3600 & 0.7850 & 2.18$\times$ \\
+128 & 32 & 0.2427 & 0.7866 & 3.24$\times$ \\
+\midrule
+256 & 16 & 0.4121 & 0.8267 & 2.01$\times$ \\
+256 & 32 & 0.3010 & 0.8263 & 2.75$\times$ \\
+\midrule
+512 &  8 & 0.5212 & 0.8720 & 1.67$\times$ \\
+512 & 16 & 0.4466 & 0.8688 & 1.95$\times$ \\
+512 & 32 & 0.3442 & 0.8673 & 2.52$\times$ \\
+\bottomrule
+\end{tabular}
+\normalsize
+\end{table}
+
+BrandOnly is strictly better in quality than OjaKV at every measured
+setting, largest at short contexts (up to 4.69$\times$ at $T=64$, $R=32$)
+and increasing with rank, consistent with the EYM guarantee.  A
+12-configuration sweep (layers 0, 8, 16, 24 $\times$ KV heads 0, 3, 6 of
+Mistral-7B; full numbers in Appendix~\ref{app:multihead}) confirms this is
+not an artifact of one head: BrandOnly dominates at every configuration,
+with wide advantage variance at $R=32$ reflecting per-head
+singular-value-decay heterogeneity.
+
+\textbf{Speed.}  BrandOnly is 3.7--4.1$\times$ slower per token than OjaKV
+in Python/eager mode (dominated by call overhead, not compute) due to the
+$\mathcal{O}(T_{\max}R^2)$ U-rotation; the FLOPs ratio is more
+representative of compiled performance, at only ${\sim}3.9\times$ raw
+overhead, falling to ${\sim}0.6\times$ (cheaper than OjaKV) once the
+U-rotation is lazily flushed every $N{=}8$ tokens (Section~\ref{sec:xla}),
+at the cost of bounded inter-flush error in $U$.
+
+\paragraph{Streaming error accumulation.}
+Figure~\ref{fig:comparison} (center panel) shows how reconstruction error grows
+as tokens accumulate at rank~16.  OjaKV's error rises faster because Oja's
+stale projections compound; BrandOnly's EYM guarantee holds at each step (it
+never freezes in this ablation), giving a consistently lower and flatter
+error trajectory.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.85\linewidth]{benchmark_brand_vs_oja.pdf}
+\caption{BrandOnly-vs-OjaKV ablation (no freeze). Left: reconstruction error vs rank at $T=512$. Center: streaming error
+accumulation at rank~16 over 512 tokens. Right: per-token update time vs rank at $T=512$.}
+\label{fig:comparison}
+\end{figure}
+
+\subsection{TKV Long-Context Reconstruction vs OjaKV}
+\label{sec:longctx}
+
+The ablation above shows BrandOnly's warmup mechanism is accurate, but
+Brand's update cannot run forever at long context: the $13.4\times$
+update-time gap at $T=16{,}000$ (Section~\ref{sec:freeze}) is exactly why
+TKV freezes after a bounded warmup.  We now evaluate TKV itself --- warmup
+through $T_0=512$ tokens via Brand updates, then frozen --- against OjaKV
+(which streams throughout) at long context.  K/V matrices here are
+synthetic, with singular values decaying as $1/\sqrt{i+1}$ across the
+$d=64$ feature dimensions, allowing controlled sweeps to $T=32{,}000$ tokens
+without the cost of extracting that much real Mistral-7B context.
+
+TKV wins at every $(T, R)$ tested, with the advantage growing at higher
+rank (full numbers in Appendix~\ref{app:longctx}); Figure~\ref{fig:longctx}
+shows the trend visually.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.8\linewidth]{benchmark_tkv_reconstruction.pdf}
+\caption{Left: TKV vs OjaKV reconstruction error vs sequence length, by rank.
+Right: TKV error vs rank, by sequence length.  TKV's error stays essentially
+flat as $T$ grows past the $T_0=512$ freeze point, while OjaKV's drifting
+basis degrades.}
+\label{fig:longctx}
+\end{figure}
+
+TKV's error is nearly constant past the freeze point (e.g., at $R=16$:
+$0.537 \to 0.548 \to 0.549$ from $T=1$K to $32$K) despite receiving no
+further SVD updates, while OjaKV's error continues to be dominated by basis
+staleness.
+
+\paragraph{Decode-phase latency.}  Using real Mistral-7B KV activations with
+a shared 256-token warmup, TKV's frozen-phase update costs $0.19$\,ms per
+decode token at ranks $8$--$32$ --- $2.6$--$3.0\times$ faster than OjaKV
+and roughly $10$--$11\times$ faster than continuing to run Brand's update
+(BrandOnly), which is exactly the cost TKV's freeze avoids.  At rank~64
+this advantage reverses (TKV $0.77$\,ms vs.\ OjaKV's $0.57$\,ms); we lack a
+confident mechanistic explanation and flag it as an open observation
+(Section~\ref{sec:limitations}) rather than a settled result (full
+per-rank numbers in Appendix~\ref{app:decode}).
+
+\subsection{Memory Compression}
+
+At $T=512$, $d=64$, the memory ratio (compressed/dense) is
+$0.070/0.141/0.282/0.563$ for $R=4/8/16/32$ --- at rank~16, this corresponds to 28.2\% of the dense cache memory, where the
+BrandOnly ablation (Section~\ref{sec:brandonly-ablation}) shows a
+1.95$\times$ reconstruction advantage over OjaKV at the same rank ($T=512$,
+Table~\ref{tab:recon}).  At rank~32 (56.3\% of dense memory), the Halko
+cold-start ablation (Section~\ref{sec:ppl}) is effectively lossless on
+Mistral-7B too (ratio 0.999, Appendix~\ref{app:ppl}).  At the scale TKV
+targets, the same storage format gives a much larger absolute saving: at
+$T=128$K tokens, a TKV rank pyramid (average rank~15) gives a 4.3$\times$
+compression at GPT-2 \citep{radford2019} scale that holds consistently from $T=1$K to $128$K
+(full breakdown in Appendix~\ref{app:memory}).  On Mistral-7B's real
+architecture (32 layers, 8 KV heads, $d=128$), the same pyramid gives an
+even larger 8.5$\times$ compression at the same scale (3.94\,GB versus
+33.55\,GB at 128K tokens, Table~\ref{tab:longmem-mistral}) --- grouped-query
+attention \citep{gqa2023} caches fewer KV heads per layer than GPT-2's multi-head attention,
+so TKV's per-KV-head compression compounds into a larger overall saving on
+the architecture modern long-context models actually use.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.5\linewidth]{benchmark_memory.pdf}
+\caption{Memory compression ratio vs sequence length at various ranks.
+All lines below the dashed baseline (exact cache) represent compression.}
+\label{fig:memory}
+\end{figure}
+
+\begin{table}[t]
+\centering
+\caption{Mistral-7B-scale memory (32 layers $\times$ 8 KV heads, $d=128$,
+float32) at long context, full KV cache vs.\ a uniform-rank OjaKV
+($R=8$) vs.\ a TKV rank pyramid (PyramidKV-style \citep{pyramidkv2024} layer ranks, average
+rank~15, as used in Table~\ref{tab:ppl-pyramid}).  Compression vs.\ full is
+higher than at GPT-2 scale (Appendix~\ref{app:memory}) and holds steady
+from 1K to 128K tokens.}
+\label{tab:longmem-mistral}
+\small
+\begin{tabular}{rcccc}
+\toprule
+Tokens & Full KV & OjaKV ($R{=}8$) & TKV pyramid & Compression \\
+\midrule
+   1,000 &  0.262\,GB & 0.018\,GB & 0.035\,GB & 7.6$\times$ \\
+   8,000 &  2.097\,GB & 0.133\,GB & 0.250\,GB & 8.4$\times$ \\
+  32,000 &  8.389\,GB & 0.526\,GB & 0.987\,GB & 8.5$\times$ \\
+ 128,000 & 33.554\,GB & 2.099\,GB & 3.936\,GB & 8.5$\times$ \\
+\bottomrule
+\end{tabular}
+\normalsize
+\end{table}
+
+\subsection{Perplexity (Mistral-7B)}
+\label{sec:ppl}
+
+We evaluate two configurations on Mistral-7B (32 layers, 8 KV heads via
+grouped-query attention, $d=128$), measuring perplexity on a small held-out
+set of technical sentences.  We note that this is a proof-of-concept
+evaluation; results on WikiText-2 or PG-19 \citep{rae2020} are needed to make strong claims
+about end-to-end perplexity (Section~\ref{sec:limitations}).
+
+\paragraph{Halko cold-start, uniform rank (ablation).}  We first measure a
+single Halko cold-start SVD per forward call with no Brand streaming and no
+freeze, at a single uniform rank applied to every layer --- this isolates
+the cold-start mechanism's lossiness on its own, since streaming Brand
+correctness is already validated on real activations by
+Section~\ref{sec:brandonly-ablation}.
+
+Exact perplexity is 19.39; full per-rank numbers are in
+Appendix~\ref{app:ppl} and Figure~\ref{fig:perplexity}.
+At ranks 8 and 16, perplexity is far above exact (14.2$\times$ and
+4.8$\times$ worse); the knee falls between rank~16 and rank~32, reaching
+lossless perplexity at 50.2\% of dense memory ($T=128$).  This knee is
+sharper and shifted higher than GPT-2's (lossless by rank~32 of $d=64$),
+since Mistral's larger head dimension means a fixed absolute rank covers a
+smaller subspace fraction.  At rank~64 the memory ratio exceeds 1.0,
+underscoring that compression only pays off when $R \ll \min(T, d)$.
+
+\paragraph{TKV, per-layer rank pyramid.}  We next apply TKV's freeze
+mechanism with PyramidKV-style \citep{pyramidkv2024} layer ranks (higher rank for early layers,
+lower for later ones, average rank~15) and compare against the same pyramid
+schedule applied to OjaKV.
+
+\begin{table}[t]
+\centering
+\caption{Perplexity, exact cache vs.\ a TKV rank pyramid (avg.\ rank 15)
+vs.\ the same pyramid schedule applied to OjaKV, at both model scales.
+TKV's frozen basis stays close to exact at both scales (beating it on
+GPT-2, landing slightly above it on Mistral-7B) while OjaKV's drifting
+basis collapses, more severely at the larger scale.}
+\label{tab:ppl-pyramid}
+\small
+\begin{tabular}{lccc}
+\toprule
+& Exact & TKV pyramid & OjaKV pyramid \\
+\midrule
+GPT-2 small & 129.62 & 89.59 (0.691$\times$) & 756.18 (5.834$\times$) \\
+Mistral-7B & 19.39 & 20.08 (1.036$\times$) & 1167.11 (60.191$\times$) \\
+\bottomrule
+\end{tabular}
+\normalsize
+\end{table}
+
+On a 7B-parameter model, TKV's frozen rank-15 basis is close to lossless
+(3.6\% degradation) at 8.5$\times$ memory compression
+(Table~\ref{tab:longmem-mistral}), while OjaKV with the identical rank
+budget is $60\times$ worse than exact --- the drifting-basis failure mode
+(Section~\ref{sec:brandonly-ablation}) compounds even more severely here
+than on GPT-2 ($5.8\times$, Table~\ref{tab:ppl-pyramid}), consistent with
+drift compounding across more layers (32 vs.\ 12) before reaching the
+language-modeling head.  Notably, on GPT-2 small TKV's pyramid actually
+\emph{beat} the exact cache (a 31\% improvement) while on Mistral-7B it
+lands slightly above exact instead --- evidence that the ``free
+regularization'' effect is at least partly a small-model artifact, while
+the dramatic margin over OjaKV is the robust finding that holds at both
+scales.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.6\linewidth]{benchmark_perplexity.pdf}
+\caption{Mistral-7B perplexity (left) and perplexity ratio vs exact (right)
+as a function of the Halko cold-start ablation's uniform rank
+(full numbers in Appendix~\ref{app:ppl}).  The sharp knee between rank~16
+and rank~32 identifies the minimum useful rank for this model geometry.}
+\label{fig:perplexity}
+\end{figure}
+
+\subsection{Importance-Weighted Cold Start: Evaluation}
+\label{sec:exp-importance}
+
+To evaluate importance-weighted initialization, we construct a $128 \times 64$
+key matrix where the first 32 tokens share a rank-4 subspace (mimicking
+semantically coherent high-attention tokens) and the remaining 96 are random
+noise, and apply \emph{oracle} importance weights (10.0 for important
+tokens, 0.1 for noise) derived from ground-truth knowledge of which tokens
+matter rather than EMA attention statistics --- an upper bound on what
+real attention-derived weights can achieve in practice.
+
+At rank~4, both methods struggle because the rank budget is below the true
+rank-4 subspace of important tokens plus noise interference; at rank $\geq 8$,
+importance weighting reduces important-token error by more than 10$\times$
+(full per-rank numbers in Appendix~\ref{app:importance}), suggesting that EMA
+attention-weight statistics available during generation can dramatically
+improve re-compression quality when context windows are refreshed.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.6\linewidth]{benchmark_importance.pdf}
+\caption{Left: important-token reconstruction error vs rank. Right: total
+reconstruction error vs rank. Importance weighting provides near-lossless
+recovery of high-attention tokens at rank $\geq 8$.}
+\label{fig:importance}
+\end{figure}
+
+%% ============================================================
+\section{Related Work}
+\label{sec:related}
+
+\paragraph{Offline KV compression.}
+SVDq \citep{svdq2025}, xKV \citep{xkv2025}, KVTC \citep{kvtc2026}, and
+KQ-SVD \citep{kqsvd2025} all apply batch or cross-layer SVD with offline
+calibration (per-prompt, cross-layer, or attention-matrix decomposition
+respectively), achieving strong compression but incompatible with streaming
+generation.
+
+\paragraph{Online KV compression.}
+OjaKV \citep{ojakov2025} is the closest prior work: Oja's rule applied
+token-by-token to maintain an approximate, calibration-free PCA basis with
+no per-token optimality guarantee.  LoRC \citep{lorc2024} uses truncated
+SVD per layer offline.  StreamingLLM \citep{streamingllm2023} keeps only
+sink tokens and a recent window in full precision, orthogonal to low-rank
+compression; TKV composes directly with this idea (\emph{TKV+Sink}, full
+evaluation in Section~\ref{sec:limitations}).
+
+\paragraph{Eviction-based KV compression.}
+An orthogonal line reduces the cache by \emph{dropping} tokens rather than
+factorizing them: H2O \citep{h2o2023} and Scissorhands \citep{scissorhands2023}
+evict by accumulated attention mass, SnapKV \citep{snapkv2024} selects
+prefill tokens from an observation window, and PyramidKV \citep{pyramidkv2024}
+varies the retained budget by layer.  These are complementary to low-rank
+compression --- eviction reduces $T$ while TKV reduces $d$ --- and we borrow
+PyramidKV's layerwise budget schedule as our rank pyramid
+(Section~\ref{sec:ppl}); Moment-KV \citep{momentkv2024} extends this line
+with momentum-based importance scores.
+
+\paragraph{Randomized linear algebra.}
+Halko's framework \citep{halko2011} is standard for large-scale randomized
+SVD, and Brand's update \citep{brand2006} is well-known in numerical linear
+algebra but, to our knowledge, not previously applied to KV cache
+compression.  The $\Phi$-bridge's use of a dense Gaussian matrix
+satisfying both Johnson-Lindenstrauss and Halko's sub-Gaussian row
+requirement (vs.\ the structured hashing of the count-min sketch
+\citep{cormode2005}) is a connection novel to this work.
+
+%% ============================================================
+\section{Limitations and Future Work}
+\label{sec:limitations}
+
+\textbf{Scope of evaluation.}  Results cover GPT-2 small and Mistral-7B; a
+single (layer, KV-head) pair for the headline ablation, broadened to a
+12-configuration sweep (Appendix~\ref{app:multihead}) and a pyramid
+schedule across all layers/heads for perplexity and long-context.  Llama,
+Qwen, real (non-synthetic) long-context activations, and a systematic
+pyramid-schedule sweep across scales remain open.
+
+\textbf{Evaluation gaps.}  Importance weighting uses oracle rather than
+real EMA attention weights; long-context benchmarks use synthetic,
+non-shifting statistics, so a pathological distribution shift after the
+warmup window $T_0$ is not yet evaluated empirically
+(Proposition~\ref{prop:postfreeze} bounds this risk theoretically).
+Perplexity uses a small held-out set rather than full WikiText-2, and
+\emph{TKV+Sink} and dynamic rank scheduling are implemented but not yet
+benchmarked end-to-end.
+
+\textbf{Performance.}  BrandOnly is 3.7--4.1$\times$ slower than OjaKV
+during warmup; once frozen, TKV is 2.6--3.0$\times$ faster at ranks 8--32
+but reverses at rank~64 for reasons we do not yet understand.  A GPU
+evaluation is required before deployment.
+
+%% ============================================================
+\section{Conclusion}
+
+We presented TKV, an online KV cache compression system combining the
+$\Phi$-bridge (Gaussian sketch reused as Halko range-finder), Halko cold
+start and Brand's exact rank-1 update for a bounded warmup window, and a
+freeze transition that holds per-token cost at $\mathcal{O}(R{\cdot}d)$
+indefinitely thereafter --- to our knowledge, the first online KV
+compression method with a per-token EYM optimality guarantee through
+warmup, followed by a freeze transition that avoids Brand's update cost
+from compounding at long context.  On Mistral-7B's real architecture, a TKV
+rank pyramid reaches 8.5$\times$ memory compression at 128K tokens while
+landing within 3.6\% of exact-cache perplexity, versus OjaKV's $60\times$
+degradation under the identical rank budget --- a margin that holds (and on
+GPT-2 small, reverses in TKV's favor) at both model scales we tested.
+
+The core insight is that exact rank-1 updates (Brand) and randomized warm-up
+(Halko) are compatible during a bounded window, and that freezing the
+resulting basis afterward --- rather than continuing to update it exactly
+forever, or letting it drift as in Oja's rule --- is what makes the
+combination viable at long context.  The $\Phi$-bridge unifies this
+pipeline with the importance-tracking data structure at no additional cost.
+
+%% ============================================================
+\small
+\bibliography{colm2026_conference}
+\bibliographystyle{colm2026_conference}
+
+\appendix
+\enlargethispage{8\baselineskip}
+\section{Appendix: Full Supplementary Numbers}
+\label{app:multihead}
+\label{app:memory}
+\label{app:longctx}
+\label{app:ppl}
+\label{app:decode}
+\label{app:importance}
+\label{app:attn}
+
+\begin{description}[topsep=2pt,itemsep=2pt,parsep=0pt,leftmargin=0pt,font=\normalfont\bfseries]
+\item[Compressed attention (\ref{sec:importance}):] attention is
+computed directly from the SVD factors: $\mathbf{s} = \mathbf{q} V_K^\top
+\Sigma_K U_K^\top \in \R^T$, $\mathbf{out} = \mathrm{softmax}(\mathbf{s})
+U_V \Sigma_V V_V \in \R^d$, at $\mathcal{O}(R(T{+}d))$ cost; post-freeze,
+$U_K \Sigma_K$ is replaced by the stored projections $\mathrm{proj}_K$.
+
+\item[Importance-weighted cold start (\ref{sec:exp-importance}):]
+oracle-weighted, 128-token benchmark; uniform/weighted important-token
+error at rank $4/8/16/32$: $0.598/0.495$ ($17.2\%$ reduction),
+$0.269/0.014$ ($94.9\%$), $0.111/0.008$ ($93.0\%$), $0.045/0.004$
+($90.5\%$).
+
+\item[Decode latency (\ref{sec:longctx}):] at $R=8/16/32/64$, ms/tok is
+$1.953/2.141/2.052/11.939$ (BrandOnly), $0.192/0.188/0.193/0.771$ (TKV),
+$0.498/0.495/0.584/0.568$ (OjaKV); TKV error $0.597/0.536/0.456/0.351$.
+
+\item[BrandOnly vs OjaKV sweep:] 12 configs, Mistral-7B layers 0/8/16/24
+$\times$ heads 0/3/6: advantage ranges $1.61\times$ ($T{=}512,R{=}8$) to
+$7.67\times{\pm}4.59\times$ ($T{=}64,R{=}32$), dominating OjaKV at all 12
+configs (cf.\ Table~\ref{tab:recon}).
+
+\item[GPT-2-scale memory:] GPT-2, $d{=}64$: full
+KV/OjaKV($R{=}8$)/TKV-pyramid memory is $0.074/0.010/0.018$\,GB at 1K,
+$0.590/0.074/0.139$\,GB at 8K, $2.359/0.296/0.554$\,GB at 32K,
+$9.437/1.180/2.213$\,GB at 128K --- $4.0$--$4.3\times$ compression, lower
+than Mistral-7B's $8.5\times$ (fewer KV heads via GQA).
+
+\item[Long-context reconstruction (\ref{sec:longctx}):] across
+$T{=}1\text{,}000/8\text{,}000/32\text{,}000$, $R{=}4/8/16$, TKV's error
+ranges $0.537$--$0.754$ vs.\ OjaKV's $0.632$--$0.791$, winning at every
+$(T,R)$ tested. Halko cold-start perplexity at rank~48: $19.37$, memory
+ratio $0.753$.
+\end{description}
+
+\end{document}

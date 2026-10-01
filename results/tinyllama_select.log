@@ -1,0 +1,32 @@
+
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 on mps...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 5040.60it/s]
+Using the latest cached version of the dataset since Salesforce/wikitext couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'wikitext-2-raw-v1' at ~/.cache/huggingface/datasets/Salesforce___wikitext/wikitext-2-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3 (last modified on Sat Jun 13 10:21:24 2026).
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (341468 > 2048). Running this sequence through the model will result in indexing errors
+  ctx=2048 budget=0.672 depths=[0.1, 0.3, 0.5, 0.7, 0.9] words=['blue', 'gold', 'dark', 'soft', 'wild', 'cold'] warmup=512 sink=64 question_len=19
+  SEL                      exact     0   0.748   0.841   0.866   0.878   0.813   0.829  1.00
+  SEL          none/evict/0/1312     0   0.000   0.000   0.908   0.895   0.863   0.533  0.60
+  SEL         snapkv/evict/0/256  1056   0.523   0.419   0.288   0.694   0.818   0.548  0.67
+  SEL            h2o/evict/0/256  1056   0.546   0.697   0.604   0.365   0.807   0.604  0.77
+  SEL         random/evict/0/256  1056   0.370   0.081   0.037   0.347   0.824   0.332  0.37
+  SEL     residual/lowrank/8/768   280   0.196   0.312   0.363   0.860   0.814   0.509  0.67
+  SEL       snapkv/lowrank/8/768   280   0.040   0.113   0.005   0.866   0.808   0.366  0.43
+  SEL          h2o/lowrank/8/768   280   0.000   0.000   0.001   0.868   0.803   0.334  0.40
+  SEL       snapkv_q/evict/0/256  1056   0.755   0.841   0.873   0.882   0.820   0.834  1.00
+
+======================================================================================
+Query-agnostic needle retrieval at 0.672x KV memory (mean P per depth; acc = top-1)
+======================================================================================
+                    config     M   d=0.1   d=0.3   d=0.5   d=0.7   d=0.9  mean P   acc
+--------------------------------------------------------------------------------------
+                     exact     0   0.748   0.841   0.866   0.878   0.813   0.829  1.00
+         none/evict/0/1312     0   0.000   0.000   0.908   0.895   0.863   0.533  0.60
+        snapkv/evict/0/256  1056   0.523   0.419   0.288   0.694   0.818   0.548  0.67
+           h2o/evict/0/256  1056   0.546   0.697   0.604   0.365   0.807   0.604  0.77
+        random/evict/0/256  1056   0.370   0.081   0.037   0.347   0.824   0.332  0.37
+    residual/lowrank/8/768   280   0.196   0.312   0.363   0.860   0.814   0.509  0.67
+      snapkv/lowrank/8/768   280   0.040   0.113   0.005   0.866   0.808   0.366  0.43
+         h2o/lowrank/8/768   280   0.000   0.000   0.001   0.868   0.803   0.334  0.40
+      snapkv_q/evict/0/256  1056   0.755   0.841   0.873   0.882   0.820   0.834  1.00
+======================================================================================

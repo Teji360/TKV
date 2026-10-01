@@ -1,5 +1,46 @@
-This is BibTeX, Version 0.99d
-Capacity: max_strings=35307, hash_size=35307, hash_prime=30011
+This is BibTeX, Version 0.99e (TeX Live 2026)
+Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
 The top-level auxiliary file: TKV.aux
 The style file: colm2026_conference.bst
 Database file #1: colm2026_conference.bib
+You've used 22 entries,
+            2773 wiz_defined-function locations,
+            688 strings with 9500 characters,
+and the built_in function-call counts, 13367 in all, are:
+= -- 986
+> -- 1382
+< -- 4
++ -- 463
+- -- 441
+* -- 1201
+:= -- 2160
+add.period$ -- 68
+call.type$ -- 22
+change.case$ -- 212
+chr.to.int$ -- 22
+cite$ -- 44
+duplicate$ -- 417
+empty$ -- 793
+format.name$ -- 464
+if$ -- 2678
+int.to.chr$ -- 1
+int.to.str$ -- 1
+missing$ -- 9
+newline$ -- 120
+num.names$ -- 88
+pop$ -- 508
+preamble$ -- 1
+purify$ -- 190
+quote$ -- 0
+skip$ -- 413
+stack$ -- 0
+substring$ -- 63
+swap$ -- 30
+text.length$ -- 0
+text.prefix$ -- 0
+top$ -- 0
+type$ -- 242
+warning$ -- 0
+while$ -- 68
+width$ -- 0
+write$ -- 276

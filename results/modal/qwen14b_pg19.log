@@ -1,0 +1,19 @@
+
+Loading Qwen/Qwen2.5-14B on cuda (bfloat16)...
+Loading pg19...
+  corpus tokens: 57,721  layers=48  head_dim=128
+  ctx=4096 stride=1024 warmup=512 sink=64 window=256 max_windows=30 pre_rope=True
+      exact                      -  ppl=6.323  ppl_post=6.330  mem=1.000  (0.70s/window)
+   tkv_sink                   r=64  ppl=6.468  ppl_post=6.478  mem=0.594  (8.23s/window)
+  streaming_llm                   r=64  ppl=6.376  ppl_post=6.384  mem=0.594  (2.49s/window)
+
+===================================================================
+Perplexity (lower = better); mem = KV bytes / exact
+===================================================================
+   method                  ranks  PPL(all)  PPL(post)    mem  s/win
+-------------------------------------------------------------------
+    exact                      -     6.323      6.330  1.000   0.70
+ tkv_sink                   r=64     6.468      6.478  0.594   8.23
+streaming_llm                   r=64     6.376      6.384  0.594   2.49
+===================================================================
+tokens scored: all=33,791  post-freeze=33,279  windows=30

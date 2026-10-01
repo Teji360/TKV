@@ -1,0 +1,20 @@
+
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 on mps...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 5044.07it/s]
+Using the latest cached version of the dataset since Salesforce/wikitext couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'wikitext-2-raw-v1' at ~/.cache/huggingface/datasets/Salesforce___wikitext/wikitext-2-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3 (last modified on Sat Jun 13 10:21:24 2026).
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (341468 > 2048). Running this sequence through the model will result in indexing errors
+  ctx=2048 budget=0.672 depths=[0.1, 0.3, 0.5, 0.7, 0.9] words=['blue', 'gold', 'dark', 'soft', 'wild', 'cold'] warmup=512 sink=64 question_len=19
+  SEL                      exact     0   0.748   0.841   0.866   0.878   0.813   0.829  1.00
+  SEL      residualx/evict/8/256  1056   0.648   0.617   0.721   0.722   0.834   0.708  0.83
+  SEL     residualx/evict/32/256  1056   0.565   0.433   0.603   0.640   0.839   0.616  0.77
+
+======================================================================================
+Query-agnostic needle retrieval at 0.672x KV memory (mean P per depth; acc = top-1)
+======================================================================================
+                    config     M   d=0.1   d=0.3   d=0.5   d=0.7   d=0.9  mean P   acc
+--------------------------------------------------------------------------------------
+                     exact     0   0.748   0.841   0.866   0.878   0.813   0.829  1.00
+     residualx/evict/8/256  1056   0.648   0.617   0.721   0.722   0.834   0.708  0.83
+    residualx/evict/32/256  1056   0.565   0.433   0.603   0.640   0.839   0.616  0.77
+======================================================================================

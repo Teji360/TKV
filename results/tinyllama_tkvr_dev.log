@@ -1,0 +1,22 @@
+
+Loading TinyLlama/TinyLlama-1.1B-Chat-v1.0 on mps...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 6504.00it/s]
+Using the latest cached version of the dataset since Salesforce/wikitext couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'wikitext-2-raw-v1' at ~/.cache/huggingface/datasets/Salesforce___wikitext/wikitext-2-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3 (last modified on Sat Jun 13 10:21:24 2026).
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (341468 > 2048). Running this sequence through the model will result in indexing errors
+  ctx=2048 budget=0.672 depths=[0.1, 0.3, 0.5, 0.7, 0.9] words=['blue', 'gold', 'dark', 'soft', 'wild', 'cold'] warmup=512 sink=64 question_len=19 offset_base=20
+  SEL                      exact     0   0.742   0.741   0.708   0.799   0.786   0.755  1.00
+  SEL    residual/lowrank/16/256   704   0.431   0.548   0.623   0.696   0.786   0.617  0.90
+  SEL     residual/lowrank/8/256   905   0.555   0.513   0.522   0.543   0.790   0.584  0.80
+  SEL     residual/lowrank/4/256   986   0.411   0.304   0.594   0.581   0.782   0.534  0.83
+
+======================================================================================
+Query-agnostic needle retrieval at 0.672x KV memory (mean P per depth; acc = top-1)
+======================================================================================
+                    config     M   d=0.1   d=0.3   d=0.5   d=0.7   d=0.9  mean P   acc
+--------------------------------------------------------------------------------------
+                     exact     0   0.742   0.741   0.708   0.799   0.786   0.755  1.00
+   residual/lowrank/16/256   704   0.431   0.548   0.623   0.696   0.786   0.617  0.90
+    residual/lowrank/8/256   905   0.555   0.513   0.522   0.543   0.790   0.584  0.80
+    residual/lowrank/4/256   986   0.411   0.304   0.594   0.581   0.782   0.534  0.83
+======================================================================================
